@@ -602,6 +602,24 @@ function updateMetrics() {
   setMetrics(currentVolumeCm3, totalVolumeCm3);
 }
 
+function setDailyCounters(payload) {
+  if (!elements.dailyTotal) return;
+  const total =
+    typeof payload?.total === "number"
+      ? payload.total
+      : typeof payload?.count === "number"
+      ? payload.count
+      : 0;
+  const unique = typeof payload?.unique === "number" ? payload.unique : 0;
+  const repeat =
+    typeof payload?.repeats === "number"
+      ? payload.repeats
+      : Math.max(0, total - unique);
+  elements.dailyTotal.textContent = String(total);
+  if (elements.dailyUnique) elements.dailyUnique.textContent = String(unique);
+  if (elements.dailyRepeat) elements.dailyRepeat.textContent = String(repeat);
+}
+
 function handleParsed(parsed, options = {}) {
   if (!parsed.positions.length) {
     setError("Файл не содержит треугольников.");
@@ -1179,19 +1197,20 @@ function saveUser() {
   };
 
   const body = JSON.stringify(payload);
-  const blob = new Blob([body], { type: "application/json" });
-  const usedBeacon = navigator.sendBeacon
-    ? navigator.sendBeacon("/api/visit", blob)
-    : false;
-  if (!usedBeacon) {
-    fetch("/api/visit", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body,
-      keepalive: true,
-    }).catch(() => {});
-  }
-  setTimeout(updateDailyCounter, 300);
+  fetch("/api/visit", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body,
+    keepalive: true,
+  })
+    .then((res) => (res.ok ? res.json() : null))
+    .then((data) => {
+      if (data) setDailyCounters(data);
+    })
+    .catch(() => {
+      updateDailyCounter();
+    });
+  setTimeout(updateDailyCounter, 1200);
 }
 
 function scheduleRender(frames) {
@@ -1225,21 +1244,12 @@ function readArrayBuffer(file) {
 async function updateDailyCounter() {
   if (!elements.dailyTotal) return;
   try {
-    const response = await fetch("/api/visits");
+    const response = await fetch(`/api/visits?ts=${Date.now()}`, {
+      cache: "no-store",
+    });
     if (!response.ok) throw new Error("bad response");
     const payload = await response.json();
-    const total =
-      typeof payload.total === "number"
-        ? payload.total
-        : typeof payload.count === "number"
-        ? payload.count
-        : 0;
-    const unique = typeof payload.unique === "number" ? payload.unique : 0;
-    const repeat =
-      typeof payload.repeats === "number" ? payload.repeats : Math.max(0, total - unique);
-    elements.dailyTotal.textContent = String(total);
-    if (elements.dailyUnique) elements.dailyUnique.textContent = String(unique);
-    if (elements.dailyRepeat) elements.dailyRepeat.textContent = String(repeat);
+    setDailyCounters(payload);
   } catch (error) {
     elements.dailyTotal.textContent = "—";
     if (elements.dailyUnique) elements.dailyUnique.textContent = "—";
