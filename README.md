@@ -22,6 +22,26 @@ Railway автоматически соберёт и запустит конте
 Список хранится в `data/users.json`.
 Для постоянного хранения в Railway подключите Volume к `/app/data`.
 
+## Telegram bot
+
+Переменные окружения:
+
+- `BOT_TOKEN` — токен Telegram бота
+- `WEBAPP_URL` — URL WebApp (например, `https://...`)
+- `ADMIN_IDS` — список id админов через запятую
+
+Webhook:
+
+```
+https://api.telegram.org/bot<BOT_TOKEN>/setWebhook?url=https://<ваш-домен>/telegram/webhook
+```
+
+Команды:
+
+- `/start` — кнопка открытия WebApp
+- `/users` — список пользователей (только админ)
+- `/broadcast <текст>` — рассылка (только админ)
+
 ## Формат
 
 - Поддерживается STL (binary/ASCII).
