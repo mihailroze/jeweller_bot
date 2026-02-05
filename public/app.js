@@ -38,6 +38,9 @@ const state = {
   rotation: { yaw: 0.6, pitch: -0.4 },
   dragging: false,
   lastPointer: { x: 0, y: 0 },
+  renderFrames: 0,
+  renderLoopActive: false,
+  autoSpinFrames: 0,
 };
 
 function setStatus(message) {
@@ -312,26 +315,26 @@ function mat4Multiply(a, b) {
     b33 = b[15];
 
   out[0] = a00 * b00 + a01 * b10 + a02 * b20 + a03 * b30;
-  out[1] = a10 * b00 + a11 * b10 + a12 * b20 + a13 * b30;
-  out[2] = a20 * b00 + a21 * b10 + a22 * b20 + a23 * b30;
-  out[3] = a30 * b00 + a31 * b10 + a32 * b20 + a33 * b30;
-  out[4] = a00 * b01 + a01 * b11 + a02 * b21 + a03 * b31;
+  out[1] = a00 * b01 + a01 * b11 + a02 * b21 + a03 * b31;
+  out[2] = a00 * b02 + a01 * b12 + a02 * b22 + a03 * b32;
+  out[3] = a00 * b03 + a01 * b13 + a02 * b23 + a03 * b33;
+  out[4] = a10 * b00 + a11 * b10 + a12 * b20 + a13 * b30;
   out[5] = a10 * b01 + a11 * b11 + a12 * b21 + a13 * b31;
-  out[6] = a20 * b01 + a21 * b11 + a22 * b21 + a23 * b31;
-  out[7] = a30 * b01 + a31 * b11 + a32 * b21 + a33 * b31;
-  out[8] = a00 * b02 + a01 * b12 + a02 * b22 + a03 * b32;
-  out[9] = a10 * b02 + a11 * b12 + a12 * b22 + a13 * b32;
+  out[6] = a10 * b02 + a11 * b12 + a12 * b22 + a13 * b32;
+  out[7] = a10 * b03 + a11 * b13 + a12 * b23 + a13 * b33;
+  out[8] = a20 * b00 + a21 * b10 + a22 * b20 + a23 * b30;
+  out[9] = a20 * b01 + a21 * b11 + a22 * b21 + a23 * b31;
   out[10] = a20 * b02 + a21 * b12 + a22 * b22 + a23 * b32;
-  out[11] = a30 * b02 + a31 * b12 + a32 * b22 + a33 * b32;
-  out[12] = a00 * b03 + a01 * b13 + a02 * b23 + a03 * b33;
-  out[13] = a10 * b03 + a11 * b13 + a12 * b23 + a13 * b33;
-  out[14] = a20 * b03 + a21 * b13 + a22 * b23 + a23 * b33;
+  out[11] = a20 * b03 + a21 * b13 + a22 * b23 + a23 * b33;
+  out[12] = a30 * b00 + a31 * b10 + a32 * b20 + a33 * b30;
+  out[13] = a30 * b01 + a31 * b11 + a32 * b21 + a33 * b31;
+  out[14] = a30 * b02 + a31 * b12 + a32 * b22 + a33 * b32;
   out[15] = a30 * b03 + a31 * b13 + a32 * b23 + a33 * b33;
   return out;
 }
 
 function mat4Perspective(fovy, aspect, near, far) {
-  const f = 1 / Math.tan(fovy / 2);
+  const f = 1.0 / Math.tan(fovy / 2);
   const nf = 1 / (near - far);
   const out = new Float32Array(16);
   out[0] = f / aspect;
@@ -345,21 +348,30 @@ function mat4Perspective(fovy, aspect, near, far) {
 function mat4LookAt(eye, center, up) {
   const [ex, ey, ez] = eye;
   const [cx, cy, cz] = center;
+
   let zx = ex - cx;
   let zy = ey - cy;
   let zz = ez - cz;
-  const zLen = Math.hypot(zx, zy, zz) || 1;
-  zx /= zLen;
-  zy /= zLen;
-  zz /= zLen;
+  let len = Math.hypot(zx, zy, zz);
+  if (len === 0) {
+    zz = 1;
+  } else {
+    zx /= len;
+    zy /= len;
+    zz /= len;
+  }
 
   let xx = up[1] * zz - up[2] * zy;
   let xy = up[2] * zx - up[0] * zz;
   let xz = up[0] * zy - up[1] * zx;
-  const xLen = Math.hypot(xx, xy, xz) || 1;
-  xx /= xLen;
-  xy /= xLen;
-  xz /= xLen;
+  len = Math.hypot(xx, xy, xz);
+  if (len === 0) {
+    xx = 1;
+  } else {
+    xx /= len;
+    xy /= len;
+    xz /= len;
+  }
 
   const yx = zy * xz - zz * xy;
   const yy = zz * xx - zx * xz;
@@ -387,28 +399,18 @@ function buildModelMatrix(yaw, pitch, scale) {
   const cx = Math.cos(pitch);
   const sx = Math.sin(pitch);
 
-  const r00 = cy;
-  const r01 = sy * sx;
-  const r02 = sy * cx;
-  const r10 = 0;
-  const r11 = cx;
-  const r12 = -sx;
-  const r20 = -sy;
-  const r21 = cy * sx;
-  const r22 = cy * cx;
-
   return new Float32Array([
-    r00 * scale,
-    r10 * scale,
-    r20 * scale,
+    cy * scale,
     0,
-    r01 * scale,
-    r11 * scale,
-    r21 * scale,
+    -sy * scale,
     0,
-    r02 * scale,
-    r12 * scale,
-    r22 * scale,
+    sy * sx * scale,
+    cx * scale,
+    cy * sx * scale,
+    0,
+    sy * cx * scale,
+    -sx * scale,
+    cy * cx * scale,
     0,
     0,
     0,
@@ -423,26 +425,16 @@ function buildNormalMatrix(yaw, pitch) {
   const cx = Math.cos(pitch);
   const sx = Math.sin(pitch);
 
-  const r00 = cy;
-  const r01 = sy * sx;
-  const r02 = sy * cx;
-  const r10 = 0;
-  const r11 = cx;
-  const r12 = -sx;
-  const r20 = -sy;
-  const r21 = cy * sx;
-  const r22 = cy * cx;
-
   return new Float32Array([
-    r00,
-    r10,
-    r20,
-    r01,
-    r11,
-    r21,
-    r02,
-    r12,
-    r22,
+    cy,
+    0,
+    -sy,
+    sy * sx,
+    cx,
+    cy * sx,
+    sy * cx,
+    -sx,
+    cy * cx,
   ]);
 }
 
@@ -464,6 +456,11 @@ function render() {
   if (!gl || !state.program || state.vertexCount === 0) return;
 
   resizeCanvas();
+
+  if (!state.dragging && state.autoSpinFrames > 0) {
+    state.rotation.yaw += 0.006;
+    state.autoSpinFrames -= 1;
+  }
 
   const aspect = elements.canvas.width / elements.canvas.height;
   const projection = mat4Perspective(Math.PI / 4, aspect, 0.1, 100);
@@ -513,7 +510,7 @@ function uploadGeometry(positions, normals, maxDim) {
 
   state.vertexCount = positions.length / 3;
   state.scale = 1 / maxDim;
-  render();
+  scheduleRender(60);
 }
 
 function updateMetrics() {
@@ -534,7 +531,8 @@ function handleParsed(parsed) {
   uploadGeometry(parsed.positions, parsed.normals, maxDim);
   elements.empty.style.display = "none";
   setStatus("Готово. Можно вращать модель и делать скриншот.");
-  setTimeout(captureSnapshot, 60);
+  state.autoSpinFrames = 120;
+  setTimeout(captureSnapshot, 120);
 }
 
 async function handleFile(file) {
@@ -586,10 +584,15 @@ function initWebGL() {
     uniform mat4 uMVP;
     uniform mat3 uNormal;
     varying float vLight;
+    varying float vRim;
     void main() {
       vec3 n = normalize(uNormal * normal);
-      vec3 lightDir = normalize(vec3(0.4, 0.7, 0.5));
-      vLight = max(dot(n, lightDir), 0.2);
+      vec3 lightA = normalize(vec3(0.4, 0.7, 0.5));
+      vec3 lightB = normalize(vec3(-0.6, 0.2, 0.7));
+      float diff = max(dot(n, lightA), 0.0) * 0.7 + max(dot(n, lightB), 0.0) * 0.3;
+      vLight = diff + 0.25;
+      float facing = max(dot(n, vec3(0.0, 0.0, 1.0)), 0.0);
+      vRim = pow(1.0 - facing, 2.0);
       gl_Position = uMVP * vec4(position, 1.0);
     }
   `;
@@ -598,8 +601,11 @@ function initWebGL() {
     precision mediump float;
     uniform vec3 uColor;
     varying float vLight;
+    varying float vRim;
     void main() {
-      gl_FragColor = vec4(uColor * vLight, 1.0);
+      vec3 base = uColor * vLight;
+      vec3 rim = vec3(1.0, 0.95, 0.85) * vRim * 0.35;
+      gl_FragColor = vec4(base + rim, 1.0);
     }
   `;
 
@@ -656,7 +662,7 @@ function bindEvents() {
 
   elements.units.addEventListener("change", () => {
     updateMetrics();
-    render();
+    scheduleRender(5);
   });
 
   elements.capture.addEventListener("click", () => {
@@ -680,7 +686,7 @@ function bindEvents() {
       -1.4,
       Math.min(1.4, state.rotation.pitch)
     );
-    render();
+    scheduleRender(2);
   });
 
   elements.canvas.addEventListener("pointerup", (event) => {
@@ -690,7 +696,7 @@ function bindEvents() {
 
   window.addEventListener("resize", () => {
     resizeCanvas();
-    render();
+    scheduleRender(10);
   });
 }
 
@@ -700,12 +706,29 @@ function init() {
     initWebGL();
     bindEvents();
     setStatus("Готово к загрузке STL.");
+    scheduleRender(5);
   } catch (error) {
     setError("Ошибка запуска приложения.");
   }
 }
 
 init();
+
+function scheduleRender(frames) {
+  state.renderFrames = Math.max(state.renderFrames, frames);
+  if (state.renderLoopActive) return;
+  state.renderLoopActive = true;
+  const loop = () => {
+    if (state.renderFrames <= 0) {
+      state.renderLoopActive = false;
+      return;
+    }
+    state.renderFrames -= 1;
+    render();
+    requestAnimationFrame(loop);
+  };
+  requestAnimationFrame(loop);
+}
 
 function readArrayBuffer(file) {
   if (file.arrayBuffer) {
