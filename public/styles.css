@@ -590,22 +590,82 @@ select {
   object-fit: contain;
 }
 
-.mobile-controls {
+.onehand-controls {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
   display: none;
-  margin-top: 14px;
-  gap: 10px;
 }
 
-.control-row {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
+.thumbpad {
+  position: absolute;
+  right: 14px;
+  bottom: 16px;
+  width: 110px;
+  height: 110px;
+  border-radius: 50%;
+  border: 1px solid rgba(212, 175, 55, 0.45);
+  background: radial-gradient(
+    circle at 30% 30%,
+    rgba(212, 175, 55, 0.16),
+    rgba(10, 8, 7, 0.9)
+  );
+  box-shadow: 0 18px 30px rgba(0, 0, 0, 0.45);
+  pointer-events: auto;
+  touch-action: none;
 }
 
-.control-row .btn {
-  flex: 1 1 auto;
-  min-width: 88px;
-  touch-action: manipulation;
+.thumbpad::after {
+  content: "";
+  position: absolute;
+  inset: 18px;
+  border-radius: 50%;
+  border: 1px dashed rgba(212, 175, 55, 0.35);
+}
+
+.thumbpad-knob {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: linear-gradient(140deg, rgba(240, 210, 140, 0.95), rgba(140, 98, 28, 0.9));
+  transform: translate(-50%, -50%);
+  transition: transform 0.16s ease;
+  box-shadow: 0 10px 18px rgba(0, 0, 0, 0.35);
+}
+
+.zoom-control {
+  position: absolute;
+  left: 14px;
+  bottom: 16px;
+  padding: 8px 10px;
+  border-radius: var(--radius);
+  border: 1px solid rgba(212, 175, 55, 0.35);
+  background: rgba(10, 8, 7, 0.75);
+  display: grid;
+  gap: 4px;
+  align-items: center;
+  justify-items: center;
+  width: 56px;
+  height: 140px;
+  pointer-events: auto;
+}
+
+.zoom-control input[type="range"] {
+  width: 120px;
+  accent-color: var(--accent);
+  touch-action: none;
+  transform: rotate(-90deg);
+}
+
+.zoom-control span {
+  font-size: 0.65rem;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--muted);
+  text-align: center;
 }
 
 @media (max-width: 720px) {
@@ -638,7 +698,7 @@ select {
     height: 280px;
   }
 
-  .mobile-controls {
-    display: grid;
+  .onehand-controls {
+    display: block;
   }
 }

@@ -26,6 +26,9 @@ const elements = {
   empty: document.getElementById("empty"),
   canvas: document.getElementById("viewer"),
   error: document.getElementById("error"),
+  thumbpad: document.getElementById("thumbpad"),
+  thumbpadKnob: document.getElementById("thumbpad-knob"),
+  zoomSlider: document.getElementById("zoom-slider"),
   tgTotal: document.getElementById("tg-total"),
   tgUnique: document.getElementById("tg-unique"),
   tgRepeat: document.getElementById("tg-repeat"),
@@ -37,14 +40,9 @@ const elements = {
   metalAg: document.getElementById("metal-ag"),
   metalPt: document.getElementById("metal-pt"),
   metalPd: document.getElementById("metal-pd"),
-  pickFileMobile: document.getElementById("pick-file-mobile"),
-  resetView: document.getElementById("reset-view"),
-  rotateLeft: document.getElementById("rotate-left"),
-  rotateRight: document.getElementById("rotate-right"),
-  rotateUp: document.getElementById("rotate-up"),
-  rotateDown: document.getElementById("rotate-down"),
-  zoomIn: document.getElementById("zoom-in"),
-  zoomOut: document.getElementById("zoom-out"),
+  thumbpad: document.getElementById("thumbpad"),
+  thumbpadKnob: document.getElementById("thumbpad-knob"),
+  zoomSlider: document.getElementById("zoom-slider"),
 };
 
 window.__APP_READY__ = true;
@@ -79,6 +77,14 @@ const state = {
   shareConfig: {
     webUrl: window.location.origin,
     tgBotUrl: "",
+  },
+  oneHand: {
+    active: false,
+    centerX: 0,
+    centerY: 0,
+    lastX: 0,
+    lastY: 0,
+    radius: 0,
   },
 };
 
@@ -1058,12 +1064,6 @@ function bindEvents() {
   elements.fileInput.addEventListener("change", (event) =>
     handleFiles(event.target.files)
   );
-  if (elements.pickFileMobile) {
-    elements.pickFileMobile.addEventListener("click", () =>
-      elements.fileInput.click()
-    );
-  }
-
   elements.dropZone.addEventListener("dragover", (event) => {
     event.preventDefault();
     elements.dropZone.classList.add("hover");
@@ -1136,6 +1136,7 @@ function bindEvents() {
       event.preventDefault();
       const delta = Math.sign(event.deltaY) * 0.12;
       state.zoom = Math.min(3.5, Math.max(0.4, state.zoom - delta));
+      syncZoomSlider();
       scheduleRender(4);
     },
     { passive: false }
@@ -1158,6 +1159,7 @@ function bindEvents() {
     if (state.pinch.distance > 0) {
       const scale = dist / state.pinch.distance;
       state.zoom = Math.min(3.5, Math.max(0.4, state.zoom * scale));
+      syncZoomSlider();
       scheduleRender(4);
     }
     state.pinch.distance = dist;
@@ -1167,44 +1169,72 @@ function bindEvents() {
     state.pinch.active = false;
   });
 
-  if (elements.rotateLeft) {
-    elements.rotateLeft.addEventListener("click", () => {
-      state.rotation.yaw -= 0.25;
-      scheduleRender(4);
-    });
-    elements.rotateRight.addEventListener("click", () => {
-      state.rotation.yaw += 0.25;
-      scheduleRender(4);
-    });
-    elements.rotateUp.addEventListener("click", () => {
-      state.rotation.pitch -= 0.25;
-      scheduleRender(4);
-    });
-    elements.rotateDown.addEventListener("click", () => {
-      state.rotation.pitch += 0.25;
+  if (elements.zoomSlider) {
+    elements.zoomSlider.addEventListener("input", (event) => {
+      const value = Number(event.target.value);
+      if (!Number.isFinite(value)) return;
+      state.zoom = Math.min(3.5, Math.max(0.4, value));
       scheduleRender(4);
     });
   }
 
-  if (elements.zoomIn) {
-    elements.zoomIn.addEventListener("click", () => {
-      state.zoom = Math.min(3.5, state.zoom + 0.15);
-      scheduleRender(4);
-    });
-  }
-  if (elements.zoomOut) {
-    elements.zoomOut.addEventListener("click", () => {
-      state.zoom = Math.max(0.4, state.zoom - 0.15);
-      scheduleRender(4);
-    });
-  }
+  if (elements.thumbpad && elements.thumbpadKnob) {
+    const knob = elements.thumbpadKnob;
+    const pad = elements.thumbpad;
 
-  if (elements.resetView) {
-    elements.resetView.addEventListener("click", () => {
-      state.rotation = { yaw: 0.6, pitch: -0.4 };
-      state.zoom = 1;
-      scheduleRender(10);
+    const updateKnob = (dx, dy, smooth) => {
+      knob.style.transition = smooth ? "transform 0.16s ease" : "none";
+      knob.style.transform = `translate(${dx}px, ${dy}px)`;
+    };
+
+    const handleMove = (event) => {
+      if (!state.oneHand.active) return;
+      const dx = event.clientX - state.oneHand.centerX;
+      const dy = event.clientY - state.oneHand.centerY;
+      const distance = Math.hypot(dx, dy);
+      const radius = state.oneHand.radius;
+      const clamped = distance > radius ? radius / (distance || 1) : 1;
+      const clampedX = dx * clamped;
+      const clampedY = dy * clamped;
+
+      const deltaX = event.clientX - state.oneHand.lastX;
+      const deltaY = event.clientY - state.oneHand.lastY;
+      state.oneHand.lastX = event.clientX;
+      state.oneHand.lastY = event.clientY;
+
+      state.rotation.yaw += deltaX * 0.01;
+      state.rotation.pitch += deltaY * 0.01;
+      if (state.rotation.pitch > Math.PI) state.rotation.pitch -= Math.PI * 2;
+      if (state.rotation.pitch < -Math.PI) state.rotation.pitch += Math.PI * 2;
+      scheduleRender(2);
+
+      updateKnob(clampedX, clampedY, false);
+    };
+
+    pad.addEventListener("pointerdown", (event) => {
+      const rect = pad.getBoundingClientRect();
+      state.oneHand.active = true;
+      state.dragging = true;
+      state.oneHand.centerX = rect.left + rect.width / 2;
+      state.oneHand.centerY = rect.top + rect.height / 2;
+      state.oneHand.radius = Math.max(10, rect.width / 2 - 12);
+      state.oneHand.lastX = event.clientX;
+      state.oneHand.lastY = event.clientY;
+      pad.setPointerCapture(event.pointerId);
+      handleMove(event);
     });
+
+    pad.addEventListener("pointermove", handleMove);
+
+    const release = (event) => {
+      state.oneHand.active = false;
+      state.dragging = false;
+      pad.releasePointerCapture(event.pointerId);
+      updateKnob(0, 0, true);
+    };
+
+    pad.addEventListener("pointerup", release);
+    pad.addEventListener("pointercancel", release);
   }
 
   const shareText =
@@ -1246,6 +1276,7 @@ function init() {
     saveUser();
     loadShareConfig();
     updateMetals();
+    syncZoomSlider();
     scheduleRender(5);
   } catch (error) {
     setError("Ошибка запуска приложения.");
@@ -1316,6 +1347,11 @@ function readArrayBuffer(file) {
     reader.onerror = () => reject(reader.error);
     reader.readAsArrayBuffer(file);
   });
+}
+
+function syncZoomSlider() {
+  if (!elements.zoomSlider) return;
+  elements.zoomSlider.value = state.zoom.toFixed(2);
 }
 
 async function updateDailyCounter() {
