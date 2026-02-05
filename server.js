@@ -358,8 +358,9 @@ async function saveMetals(payload) {
   await fs.writeFile(METALS_PATH, JSON.stringify(payload, null, 2), "utf-8");
 }
 
-function shouldRefreshMetals(stored) {
+function shouldRefreshMetals(stored, hasEnv) {
   if (!stored || !stored.fetched_at) return true;
+  if (!hasEnv && stored.source === "env") return true;
   const ts = new Date(stored.fetched_at).getTime();
   if (!Number.isFinite(ts)) return true;
   const ageMs = Date.now() - ts;
@@ -367,6 +368,8 @@ function shouldRefreshMetals(stored) {
 }
 
 async function handleMetals(req, res) {
+  const url = new URL(req.url, `http://${req.headers.host}`);
+  const forceRefresh = url.searchParams.get("refresh") === "1";
   const envMetals = getMetalsFromEnv();
   if (envMetals) {
     await saveMetals(envMetals);
@@ -374,7 +377,7 @@ async function handleMetals(req, res) {
     return;
   }
   let stored = await loadMetals();
-  if (!stored || shouldRefreshMetals(stored)) {
+  if (forceRefresh || !stored || shouldRefreshMetals(stored, Boolean(envMetals))) {
     const fetched = await fetchCbrMetals();
     if (fetched) {
       await saveMetals(fetched);
