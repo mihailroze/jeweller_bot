@@ -20,6 +20,7 @@ const elements = {
   capture: document.getElementById("capture"),
   download: document.getElementById("download"),
   shareApp: document.getElementById("share-app"),
+  shareMenu: document.getElementById("share-menu"),
   snapshot: document.getElementById("snapshot"),
   empty: document.getElementById("empty"),
   canvas: document.getElementById("viewer"),
@@ -1170,21 +1171,39 @@ function bindEvents() {
   }
 
   if (elements.shareApp) {
-    elements.shareApp.addEventListener("click", async () => {
-      const shareUrl = window.location.origin;
-      const shareText =
-        "3D калькулятор объема моделей от Top Form. STL -> объем и вес восковки.";
-      const tg = window.Telegram?.WebApp;
-      if (tg?.openTelegramLink) {
-        const url = `https://t.me/share/url?url=${encodeURIComponent(
-          shareUrl
-        )}&text=${encodeURIComponent(shareText)}`;
-        tg.openTelegramLink(url);
-        return;
+    const shareUrl = window.location.origin;
+    const shareText =
+      "3D калькулятор объема моделей от Top Form. STL -> объем и вес восковки.";
+
+    const closeMenu = () => {
+      if (elements.shareMenu) {
+        elements.shareMenu.classList.remove("is-open");
+        elements.shareMenu.setAttribute("aria-hidden", "true");
       }
+    };
+
+    const openMenu = () => {
+      if (elements.shareMenu) {
+        elements.shareMenu.classList.add("is-open");
+        elements.shareMenu.setAttribute("aria-hidden", "false");
+      }
+    };
+
+    const toggleMenu = () => {
+      if (!elements.shareMenu) return;
+      const isOpen = elements.shareMenu.classList.contains("is-open");
+      if (isOpen) closeMenu();
+      else openMenu();
+    };
+
+    const shareToBrowser = async () => {
       if (navigator.share) {
         try {
-          await navigator.share({ title: "Top Form 3D", text: shareText, url: shareUrl });
+          await navigator.share({
+            title: "Top Form 3D",
+            text: shareText,
+            url: shareUrl,
+          });
           return;
         } catch (error) {}
       }
@@ -1196,6 +1215,48 @@ function bindEvents() {
         } catch (error) {}
       }
       window.prompt("Скопируйте ссылку:", shareUrl);
+    };
+
+    const shareToTelegram = () => {
+      const url = `https://t.me/share/url?url=${encodeURIComponent(
+        shareUrl
+      )}&text=${encodeURIComponent(shareText)}`;
+      const tg = window.Telegram?.WebApp;
+      if (tg?.openTelegramLink) {
+        tg.openTelegramLink(url);
+      } else {
+        window.open(url, "_blank");
+      }
+    };
+
+    elements.shareApp.addEventListener("click", (event) => {
+      event.stopPropagation();
+      toggleMenu();
+    });
+
+    if (elements.shareMenu) {
+      elements.shareMenu.addEventListener("click", async (event) => {
+        const target = event.target.closest(".share-option");
+        if (!target) return;
+        const type = target.getAttribute("data-share");
+        closeMenu();
+        if (type === "tg") {
+          shareToTelegram();
+        } else {
+          await shareToBrowser();
+        }
+      });
+    }
+
+    document.addEventListener("click", (event) => {
+      if (!elements.shareMenu || !elements.shareApp) return;
+      if (
+        elements.shareMenu.contains(event.target) ||
+        elements.shareApp.contains(event.target)
+      ) {
+        return;
+      }
+      closeMenu();
     });
   }
 

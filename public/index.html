@@ -13,7 +13,7 @@
       href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Manrope:wght@300;400;500;600&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css?v=10" />
+    <link rel="stylesheet" href="styles.css?v=11" />
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
   </head>
   <body>
@@ -117,6 +117,14 @@
             <button class="btn ghost" id="share-app" type="button">
               Поделиться
             </button>
+            <div class="share-menu" id="share-menu" aria-hidden="true">
+              <button class="btn ghost share-option" data-share="web" type="button">
+                Браузер
+              </button>
+              <button class="btn ghost share-option" data-share="tg" type="button">
+                Telegram
+              </button>
+            </div>
           </div>
 
           <p class="note" id="status">
@@ -202,7 +210,7 @@
       });
 
       const script = document.createElement("script");
-      script.src = `app.js?v=22`;
+      script.src = `app.js?v=23`;
       script.defer = true;
       script.onload = () => {
         setTimeout(() => {
