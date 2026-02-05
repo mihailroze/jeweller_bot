@@ -23,7 +23,6 @@ const elements = {
   empty: document.getElementById("empty"),
   canvas: document.getElementById("viewer"),
   error: document.getElementById("error"),
-  openPng: document.getElementById("open-png"),
   pickFileMobile: document.getElementById("pick-file-mobile"),
   resetView: document.getElementById("reset-view"),
   rotateLeft: document.getElementById("rotate-left"),
@@ -965,23 +964,6 @@ function bindEvents() {
   elements.capture.addEventListener("click", () => {
     captureSnapshot();
   });
-
-  if (elements.openPng) {
-    elements.openPng.addEventListener("click", async () => {
-      const dataUrl = ensureSnapshot();
-      const remoteUrl = /^https?:/i.test(state.snapshotUrl || "")
-        ? state.snapshotUrl
-        : await uploadSnapshot(dataUrl);
-      const url = remoteUrl || state.snapshotUrl || dataUrl;
-      if (!url) return;
-      const tg = window.Telegram?.WebApp;
-      if (tg?.openLink && /^https?:/i.test(url)) {
-        tg.openLink(url);
-      } else {
-        window.open(url, "_blank");
-      }
-    });
-  }
 
   const isTelegram = Boolean(window.Telegram?.WebApp);
   const isIOS = /iPad|iPhone|iPod/i.test(navigator.userAgent);
