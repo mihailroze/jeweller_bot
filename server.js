@@ -236,6 +236,8 @@ function normalizeMetals(payload) {
       Pt: pick("Pt"),
       Pd: pick("Pd"),
     },
+    source: payload.source || null,
+    fetched_at: payload.fetched_at || null,
   };
 }
 
@@ -244,10 +246,102 @@ function getMetalsFromEnv() {
   if (!raw) return null;
   try {
     const parsed = JSON.parse(raw);
-    return normalizeMetals(parsed);
+    const normalized = normalizeMetals(parsed);
+    if (normalized) {
+      normalized.source = "env";
+      normalized.fetched_at = new Date().toISOString();
+    }
+    return normalized;
   } catch (error) {
     return null;
   }
+}
+
+function formatCbrDate(date) {
+  const day = String(date.getDate()).padStart(2, "0");
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const year = date.getFullYear();
+  return `${day}/${month}/${year}`;
+}
+
+function parseCbrRecordDate(value) {
+  if (!value) return null;
+  const [day, month, year] = value.split(".");
+  if (!day || !month || !year) return null;
+  return new Date(Number(year), Number(month) - 1, Number(day));
+}
+
+function parseCbrMetalsXml(xml) {
+  const codeMap = {
+    1: "Au",
+    2: "Ag",
+    3: "Pt",
+    4: "Pd",
+  };
+  const records = [];
+  const recordRegex =
+    /<Record[^>]*Date="([^"]+)"[^>]*Code="([^"]+)"[^>]*>([\s\S]*?)<\/Record>/g;
+  let match;
+  while ((match = recordRegex.exec(xml)) !== null) {
+    const recordDate = parseCbrRecordDate(match[1]);
+    const code = Number(match[2]);
+    const body = match[3];
+    const buyMatch = /<Buy>([^<]+)<\/Buy>/i.exec(body);
+    if (!recordDate || !codeMap[code] || !buyMatch) continue;
+    const raw = buyMatch[1].replace(",", ".").replace(/\s/g, "");
+    const value = Number(raw);
+    if (!Number.isFinite(value)) continue;
+    records.push({
+      date: recordDate,
+      metal: codeMap[code],
+      value,
+    });
+  }
+
+  const latest = {};
+  let latestDate = null;
+  for (const record of records) {
+    if (!latestDate || record.date > latestDate) {
+      latestDate = record.date;
+    }
+    const current = latest[record.metal];
+    if (!current || record.date > current.date) {
+      latest[record.metal] = record;
+    }
+  }
+
+  if (!latestDate) return null;
+  return {
+    date: latestDate.toISOString().slice(0, 10),
+    prices: {
+      Au: latest.Au?.value ?? null,
+      Ag: latest.Ag?.value ?? null,
+      Pt: latest.Pt?.value ?? null,
+      Pd: latest.Pd?.value ?? null,
+    },
+  };
+}
+
+async function fetchCbrMetals() {
+  const today = new Date();
+  const from = new Date(today);
+  from.setDate(today.getDate() - 10);
+  const url = `https://www.cbr.ru/scripts/xml_metall.asp?date_req1=${formatCbrDate(
+    from
+  )}&date_req2=${formatCbrDate(today)}`;
+  const response = await fetch(url);
+  if (!response.ok) return null;
+  const xml = await response.text();
+  const parsed = parseCbrMetalsXml(xml);
+  if (!parsed) return null;
+  return {
+    date: parsed.date,
+    currency: "RUB",
+    unit: "g",
+    prices: parsed.prices,
+    source: "cbr.ru",
+    fetched_at: new Date().toISOString(),
+  };
 }
 
 async function loadMetals() {
@@ -264,6 +358,14 @@ async function saveMetals(payload) {
   await fs.writeFile(METALS_PATH, JSON.stringify(payload, null, 2), "utf-8");
 }
 
+function shouldRefreshMetals(stored) {
+  if (!stored || !stored.fetched_at) return true;
+  const ts = new Date(stored.fetched_at).getTime();
+  if (!Number.isFinite(ts)) return true;
+  const ageMs = Date.now() - ts;
+  return ageMs > 6 * 60 * 60 * 1000;
+}
+
 async function handleMetals(req, res) {
   const envMetals = getMetalsFromEnv();
   if (envMetals) {
@@ -271,7 +373,14 @@ async function handleMetals(req, res) {
     sendJson(res, 200, { ok: true, ...envMetals });
     return;
   }
-  const stored = await loadMetals();
+  let stored = await loadMetals();
+  if (!stored || shouldRefreshMetals(stored)) {
+    const fetched = await fetchCbrMetals();
+    if (fetched) {
+      await saveMetals(fetched);
+      stored = fetched;
+    }
+  }
   if (stored) {
     sendJson(res, 200, { ok: true, ...stored });
     return;

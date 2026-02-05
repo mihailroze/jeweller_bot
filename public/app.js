@@ -1330,10 +1330,20 @@ async function updateMetals() {
       el.textContent = Number.isFinite(num) ? formatter.format(num) : "—";
     };
 
-    const date = payload?.date ? new Date(payload.date) : null;
-    elements.metalDate.textContent = date
-      ? date.toLocaleDateString("ru-RU")
-      : "—";
+    const dateText = payload?.date || "";
+    let displayDate = "—";
+    if (dateText.includes("-")) {
+      const parts = dateText.split("-");
+      if (parts.length === 3) {
+        displayDate = `${parts[2]}.${parts[1]}.${parts[0]}`;
+      }
+    } else if (dateText) {
+      const date = new Date(dateText);
+      displayDate = Number.isNaN(date.getTime())
+        ? "—"
+        : date.toLocaleDateString("ru-RU");
+    }
+    elements.metalDate.textContent = displayDate;
     setValue(elements.metalAu, prices.Au);
     setValue(elements.metalAg, prices.Ag);
     setValue(elements.metalPt, prices.Pt);
