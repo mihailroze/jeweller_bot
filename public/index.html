@@ -19,8 +19,6 @@
       <header class="hero">
         <div class="brand">3D калькулятор объема моделей от Top Form.</div>
         <div>
-          <span class="tag">Telegram WebApp · Ювелир</span>
-          <h1>Калькулятор объёма 3D‑моделей</h1>
           <p>
             Загрузи STL, получи объём в см³ и вес восковки. Скриншот
             сохраняется автоматически.
@@ -85,6 +83,9 @@
             <a class="btn ghost" id="download" download="model.png"
               >Скачать PNG</a
             >
+            <button class="btn ghost" id="open-png" type="button">
+              Открыть PNG
+            </button>
           </div>
 
           <p class="note" id="status">
@@ -97,6 +98,26 @@
           <div class="viewer-wrap">
             <canvas id="viewer"></canvas>
             <div class="empty" id="empty">Модель ещё не загружена</div>
+          </div>
+          <div class="mobile-controls">
+            <div class="control-row">
+              <button class="btn ghost" id="pick-file-mobile" type="button">
+                Выбрать STL
+              </button>
+              <button class="btn ghost" id="reset-view" type="button">
+                Сброс вида
+              </button>
+            </div>
+            <div class="control-row">
+              <button class="btn ghost" id="rotate-left" type="button">⟲</button>
+              <button class="btn ghost" id="rotate-right" type="button">⟳</button>
+              <button class="btn ghost" id="rotate-up" type="button">↑</button>
+              <button class="btn ghost" id="rotate-down" type="button">↓</button>
+            </div>
+            <div class="control-row">
+              <button class="btn ghost" id="zoom-in" type="button">＋</button>
+              <button class="btn ghost" id="zoom-out" type="button">－</button>
+            </div>
           </div>
           <div class="snapshot">
             <div class="snapshot-title">Скриншот</div>
@@ -115,7 +136,7 @@
       });
 
       const script = document.createElement("script");
-      script.src = `app.js?v=6`;
+      script.src = `app.js?v=8`;
       script.defer = true;
       script.onload = () => {
         setTimeout(() => {

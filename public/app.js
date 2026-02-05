@@ -19,6 +19,15 @@ const elements = {
   empty: document.getElementById("empty"),
   canvas: document.getElementById("viewer"),
   error: document.getElementById("error"),
+  openPng: document.getElementById("open-png"),
+  pickFileMobile: document.getElementById("pick-file-mobile"),
+  resetView: document.getElementById("reset-view"),
+  rotateLeft: document.getElementById("rotate-left"),
+  rotateRight: document.getElementById("rotate-right"),
+  rotateUp: document.getElementById("rotate-up"),
+  rotateDown: document.getElementById("rotate-down"),
+  zoomIn: document.getElementById("zoom-in"),
+  zoomOut: document.getElementById("zoom-out"),
 };
 
 window.__APP_READY__ = true;
@@ -43,6 +52,7 @@ const state = {
   autoSpinFrames: 0,
   zoom: 1,
   pinch: { active: false, distance: 0 },
+  snapshotUrl: null,
 };
 
 function setStatus(message) {
@@ -533,7 +543,18 @@ function captureSnapshot() {
   render();
   const dataUrl = elements.canvas.toDataURL("image/png");
   elements.snapshot.src = dataUrl;
-  elements.download.href = dataUrl;
+  if (state.snapshotUrl) {
+    URL.revokeObjectURL(state.snapshotUrl);
+  }
+  fetch(dataUrl)
+    .then((res) => res.blob())
+    .then((blob) => {
+      state.snapshotUrl = URL.createObjectURL(blob);
+      elements.download.href = state.snapshotUrl;
+    })
+    .catch(() => {
+      elements.download.href = dataUrl;
+    });
 }
 
 function initWebGL() {
@@ -613,6 +634,11 @@ function bindEvents() {
   elements.fileInput.addEventListener("change", (event) =>
     handleFile(event.target.files[0])
   );
+  if (elements.pickFileMobile) {
+    elements.pickFileMobile.addEventListener("click", () =>
+      elements.fileInput.click()
+    );
+  }
 
   elements.dropZone.addEventListener("dragover", (event) => {
     event.preventDefault();
@@ -635,6 +661,34 @@ function bindEvents() {
 
   elements.capture.addEventListener("click", () => {
     captureSnapshot();
+  });
+
+  if (elements.openPng) {
+    elements.openPng.addEventListener("click", () => {
+      const url = state.snapshotUrl || elements.snapshot.src;
+      if (!url) return;
+      const tg = window.Telegram?.WebApp;
+      if (tg?.openLink) {
+        tg.openLink(url);
+      } else {
+        window.open(url, "_blank");
+      }
+    });
+  }
+
+  const isTelegram = Boolean(window.Telegram?.WebApp);
+  const isIOS = /iPad|iPhone|iPod/i.test(navigator.userAgent);
+  elements.download.addEventListener("click", (event) => {
+    if (!isTelegram && !isIOS) return;
+    const url = state.snapshotUrl || elements.snapshot.src;
+    if (!url) return;
+    event.preventDefault();
+    const tg = window.Telegram?.WebApp;
+    if (tg?.openLink) {
+      tg.openLink(url);
+    } else {
+      window.open(url, "_blank");
+    }
   });
 
   elements.canvas.addEventListener("pointerdown", (event) => {
@@ -696,6 +750,46 @@ function bindEvents() {
   elements.canvas.addEventListener("touchend", () => {
     state.pinch.active = false;
   });
+
+  if (elements.rotateLeft) {
+    elements.rotateLeft.addEventListener("click", () => {
+      state.rotation.yaw -= 0.25;
+      scheduleRender(4);
+    });
+    elements.rotateRight.addEventListener("click", () => {
+      state.rotation.yaw += 0.25;
+      scheduleRender(4);
+    });
+    elements.rotateUp.addEventListener("click", () => {
+      state.rotation.pitch -= 0.25;
+      scheduleRender(4);
+    });
+    elements.rotateDown.addEventListener("click", () => {
+      state.rotation.pitch += 0.25;
+      scheduleRender(4);
+    });
+  }
+
+  if (elements.zoomIn) {
+    elements.zoomIn.addEventListener("click", () => {
+      state.zoom = Math.min(3.5, state.zoom + 0.15);
+      scheduleRender(4);
+    });
+  }
+  if (elements.zoomOut) {
+    elements.zoomOut.addEventListener("click", () => {
+      state.zoom = Math.max(0.4, state.zoom - 0.15);
+      scheduleRender(4);
+    });
+  }
+
+  if (elements.resetView) {
+    elements.resetView.addEventListener("click", () => {
+      state.rotation = { yaw: 0.6, pitch: -0.4 };
+      state.zoom = 1;
+      scheduleRender(10);
+    });
+  }
 
   window.addEventListener("resize", () => {
     resizeCanvas();

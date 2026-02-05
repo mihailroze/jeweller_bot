@@ -273,6 +273,10 @@ select {
   margin-top: 16px;
 }
 
+#open-png {
+  display: none;
+}
+
 .note {
   margin-top: 14px;
   color: var(--muted);
@@ -332,6 +336,23 @@ select {
   object-fit: contain;
 }
 
+.mobile-controls {
+  display: none;
+  margin-top: 14px;
+  gap: 10px;
+}
+
+.control-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.control-row .btn {
+  flex: 1 1 auto;
+  min-width: 88px;
+}
+
 @media (max-width: 720px) {
   .hero {
     flex-direction: column;
@@ -344,5 +365,13 @@ select {
 
   #viewer {
     height: 280px;
+  }
+
+  .mobile-controls {
+    display: grid;
+  }
+
+  #open-png {
+    display: inline-flex;
   }
 }
