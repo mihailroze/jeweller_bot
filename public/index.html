@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Fraunces:wght@600;700&family=Sora:wght@300;400;600&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="styles.css?v=1" />
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
   </head>
   <body>
@@ -108,14 +108,14 @@
     <script>
       window.__APP_READY__ = false;
     </script>
-    <script src="/app.js" defer></script>
+    <script src="app.js?v=1" defer></script>
     <script>
       setTimeout(() => {
         if (!window.__APP_READY__) {
           const el = document.getElementById("error");
           if (el) {
             el.textContent =
-              "app.js не загрузился. Проверьте доступность файла /app.js.";
+              "app.js не загрузился. Проверьте доступность файла app.js.";
           }
         }
       }, 2000);
