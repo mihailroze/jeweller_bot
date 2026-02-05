@@ -19,8 +19,6 @@ const elements = {
   volumeTotal: document.getElementById("volume-total"),
   weightTotal: document.getElementById("weight-total"),
   status: document.getElementById("status"),
-  capture: document.getElementById("capture"),
-  download: document.getElementById("download"),
   shareTg: document.getElementById("share-tg"),
   snapshot: document.getElementById("snapshot"),
   empty: document.getElementById("empty"),
@@ -624,6 +622,9 @@ function updateMetrics() {
   const totalVolumeCm3 = volumeToCm3(getTotalRawVolume());
   setMetrics(currentVolumeCm3, totalVolumeCm3);
   updateDimensions();
+  if (state.vertexCount > 0) {
+    captureSnapshot();
+  }
 }
 
 function setDailyCounters(payload) {
@@ -685,7 +686,6 @@ function resetBatch() {
     state.snapshotUrl = null;
   }
   state.snapshotDataUrl = null;
-  elements.download.removeAttribute("href");
   scheduleRender(2);
 }
 
@@ -765,7 +765,6 @@ async function uploadSnapshot(dataUrl) {
         URL.revokeObjectURL(state.snapshotUrl);
       }
       state.snapshotUrl = result.url;
-      elements.download.href = result.url;
       return result.url;
     }
   } catch (error) {}
@@ -909,12 +908,16 @@ function captureSnapshot() {
 
   ctx.drawImage(baseCanvas, 0, 0);
 
-  const text = "@topform3d";
+  const watermarkText = "@topform3d";
+  const volumeText = `Объём: ${elements.volume.textContent || "0.00"} см³`;
+
   const padding = Math.max(16, Math.round(shot.width * 0.025));
-  const fontSize = Math.max(18, Math.round(shot.width * 0.04));
-  const boxHeight = Math.round(fontSize * 1.6);
-  const metrics = ctx.measureText(text);
-  const boxWidth = Math.round(metrics.width + fontSize * 1.6);
+  const fontSize = Math.max(18, Math.round(shot.width * 0.038));
+  const boxHeight = Math.round(fontSize * 1.9);
+  ctx.font = `600 ${fontSize}px "Manrope", sans-serif`;
+  const w1 = ctx.measureText(watermarkText).width;
+  const w2 = ctx.measureText(volumeText).width;
+  const boxWidth = Math.round(Math.max(w1, w2) + fontSize * 1.6);
   const x = shot.width - padding;
   const y = shot.height - padding;
 
@@ -926,25 +929,23 @@ function captureSnapshot() {
   ctx.fill();
   ctx.stroke();
 
-  ctx.font = `600 ${fontSize}px "Manrope", sans-serif`;
   ctx.textAlign = "right";
   ctx.textBaseline = "middle";
   ctx.fillStyle = "rgba(255, 235, 190, 0.95)";
   ctx.shadowColor = "rgba(0, 0, 0, 0.6)";
   ctx.shadowBlur = Math.max(2, Math.round(fontSize * 0.18));
-  ctx.fillText(text, x - fontSize * 0.4, y - boxHeight / 2);
+  ctx.fillText(watermarkText, x - fontSize * 0.4, y - boxHeight * 0.65);
+  ctx.fillText(volumeText, x - fontSize * 0.4, y - boxHeight * 0.3);
   ctx.shadowBlur = 0;
 
   const dataUrl = shot.toDataURL("image/png");
   state.snapshotDataUrl = dataUrl;
   elements.snapshot.src = dataUrl;
-  elements.download.href = dataUrl;
   if (shot.toBlob) {
     shot.toBlob((blob) => {
       if (!blob) return;
       if (!/^https?:/i.test(state.snapshotUrl || "")) {
         state.snapshotUrl = URL.createObjectURL(blob);
-        elements.download.href = state.snapshotUrl;
       }
     }, "image/png");
   } else {
@@ -953,7 +954,6 @@ function captureSnapshot() {
       .then((blob) => {
         if (!/^https?:/i.test(state.snapshotUrl || "")) {
           state.snapshotUrl = URL.createObjectURL(blob);
-          elements.download.href = state.snapshotUrl;
         }
       })
       .catch(() => {});
@@ -1069,29 +1069,6 @@ function bindEvents() {
     scheduleRender(5);
   });
 
-  elements.capture.addEventListener("click", () => {
-    captureSnapshot();
-  });
-
-  const isTelegram = Boolean(window.Telegram?.WebApp);
-  const isIOS = /iPad|iPhone|iPod/i.test(navigator.userAgent);
-  elements.download.addEventListener("click", async (event) => {
-    const dataUrl = ensureSnapshot();
-    const remoteUrl = /^https?:/i.test(state.snapshotUrl || "")
-      ? state.snapshotUrl
-      : await uploadSnapshot(dataUrl);
-    const url = remoteUrl || state.snapshotUrl || dataUrl;
-    if (!url) return;
-    elements.download.href = url;
-    if (!isTelegram && !isIOS) return;
-    event.preventDefault();
-    const tg = window.Telegram?.WebApp;
-    if (tg?.openLink && /^https?:/i.test(url)) {
-      tg.openLink(url);
-    } else {
-      window.open(url, "_blank");
-    }
-  });
 
   elements.canvas.addEventListener("pointerdown", (event) => {
     state.dragging = true;
