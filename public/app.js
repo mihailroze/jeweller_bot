@@ -23,6 +23,7 @@ const elements = {
   empty: document.getElementById("empty"),
   canvas: document.getElementById("viewer"),
   error: document.getElementById("error"),
+  dailyCount: document.getElementById("daily-count"),
   pickFileMobile: document.getElementById("pick-file-mobile"),
   resetView: document.getElementById("reset-view"),
   rotateLeft: document.getElementById("rotate-left"),
@@ -829,15 +830,35 @@ function captureSnapshot() {
     URL.revokeObjectURL(state.snapshotUrl);
   }
   state.snapshotUrl = null;
-  const dataUrl = elements.canvas.toDataURL("image/png");
+  const baseCanvas = elements.canvas;
+  const shot = document.createElement("canvas");
+  shot.width = baseCanvas.width;
+  shot.height = baseCanvas.height;
+  const ctx = shot.getContext("2d");
+  if (!ctx) return;
+  ctx.drawImage(baseCanvas, 0, 0);
+
+  const text = "@topform3d";
+  const padding = Math.max(12, Math.round(shot.width * 0.02));
+  const fontSize = Math.max(14, Math.round(shot.width * 0.035));
+  ctx.font = `600 ${fontSize}px "Manrope", sans-serif`;
+  ctx.textAlign = "right";
+  ctx.textBaseline = "bottom";
+  ctx.shadowColor = "rgba(0, 0, 0, 0.55)";
+  ctx.shadowBlur = Math.max(2, Math.round(fontSize * 0.18));
+  ctx.strokeStyle = "rgba(0, 0, 0, 0.45)";
+  ctx.lineWidth = Math.max(2, Math.round(fontSize * 0.12));
+  ctx.strokeText(text, shot.width - padding, shot.height - padding);
+  ctx.fillStyle = "rgba(255, 235, 190, 0.9)";
+  ctx.fillText(text, shot.width - padding, shot.height - padding);
+  ctx.shadowBlur = 0;
+
+  const dataUrl = shot.toDataURL("image/png");
   state.snapshotDataUrl = dataUrl;
   elements.snapshot.src = dataUrl;
   elements.download.href = dataUrl;
-  if (state.snapshotUrl) {
-    URL.revokeObjectURL(state.snapshotUrl);
-  }
-  if (elements.canvas.toBlob) {
-    elements.canvas.toBlob((blob) => {
+  if (shot.toBlob) {
+    shot.toBlob((blob) => {
       if (!blob) return;
       if (!/^https?:/i.test(state.snapshotUrl || "")) {
         state.snapshotUrl = URL.createObjectURL(blob);
@@ -1109,7 +1130,10 @@ init();
 function saveUser() {
   const tg = window.Telegram?.WebApp;
   const user = tg?.initDataUnsafe?.user;
-  if (!user || !user.id) return;
+  if (!user || !user.id) {
+    updateDailyCounter();
+    return;
+  }
   const payload = {
     user_id: user.id,
     username: user.username || null,
@@ -1122,15 +1146,18 @@ function saveUser() {
 
   const body = JSON.stringify(payload);
   const blob = new Blob([body], { type: "application/json" });
-  if (navigator.sendBeacon) {
-    navigator.sendBeacon("/api/visit", blob);
-  } else {
+  const usedBeacon = navigator.sendBeacon
+    ? navigator.sendBeacon("/api/visit", blob)
+    : false;
+  if (!usedBeacon) {
     fetch("/api/visit", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body,
+      keepalive: true,
     }).catch(() => {});
   }
+  setTimeout(updateDailyCounter, 300);
 }
 
 function scheduleRender(frames) {
@@ -1159,4 +1186,17 @@ function readArrayBuffer(file) {
     reader.onerror = () => reject(reader.error);
     reader.readAsArrayBuffer(file);
   });
+}
+
+async function updateDailyCounter() {
+  if (!elements.dailyCount) return;
+  try {
+    const response = await fetch("/api/visits");
+    if (!response.ok) throw new Error("bad response");
+    const payload = await response.json();
+    const value = typeof payload.count === "number" ? payload.count : 0;
+    elements.dailyCount.textContent = String(value);
+  } catch (error) {
+    elements.dailyCount.textContent = "—";
+  }
 }

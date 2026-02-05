@@ -11,6 +11,7 @@ const PUBLIC_DIR = path.join(__dirname, "public");
 const DATA_DIR = path.join(__dirname, "data");
 const USERS_PATH = path.join(DATA_DIR, "users.json");
 const SNAPSHOT_DIR = path.join(DATA_DIR, "snapshots");
+const VISITS_PATH = path.join(DATA_DIR, "visits.json");
 
 const BOT_TOKEN = process.env.BOT_TOKEN || "";
 const WEBAPP_URL = process.env.WEBAPP_URL || "";
@@ -75,6 +76,37 @@ async function saveUsers(users) {
   await fs.writeFile(USERS_PATH, JSON.stringify(users, null, 2), "utf-8");
 }
 
+function getDateKey() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+async function loadVisits() {
+  try {
+    const raw = await fs.readFile(VISITS_PATH, "utf-8");
+    return JSON.parse(raw);
+  } catch (error) {
+    return {};
+  }
+}
+
+async function saveVisits(visits) {
+  await ensureDataDir();
+  await fs.writeFile(VISITS_PATH, JSON.stringify(visits, null, 2), "utf-8");
+}
+
+async function incrementDailyVisit() {
+  const visits = await loadVisits();
+  const key = getDateKey();
+  visits[key] = (visits[key] || 0) + 1;
+  await saveVisits(visits);
+  return visits[key];
+}
+
+async function getDailyVisitCount(dateKey) {
+  const visits = await loadVisits();
+  return visits[dateKey] || 0;
+}
+
 function sendJson(res, status, payload) {
   const body = JSON.stringify(payload);
   res.writeHead(status, {
@@ -95,7 +127,8 @@ async function handleVisit(req, res) {
         return;
       }
       await upsertUser(payload);
-      sendJson(res, 200, { ok: true });
+      const count = await incrementDailyVisit();
+      sendJson(res, 200, { ok: true, count });
     } catch (error) {
       sendJson(res, 400, { ok: false, error: "invalid json" });
     }
@@ -157,6 +190,13 @@ async function handleSnapshot(req, res) {
       sendJson(res, 400, { ok: false, error: "invalid json" });
     }
   });
+}
+
+async function handleVisitCount(req, res) {
+  const url = new URL(req.url, `http://${req.headers.host}`);
+  const date = url.searchParams.get("date") || getDateKey();
+  const count = await getDailyVisitCount(date);
+  sendJson(res, 200, { ok: true, date, count });
 }
 
 function isAdmin(userId) {
@@ -334,6 +374,10 @@ async function serveStatic(req, res) {
 const server = http.createServer(async (req, res) => {
   if (req.method === "POST" && req.url === "/api/visit") {
     await handleVisit(req, res);
+    return;
+  }
+  if (req.method === "GET" && req.url.startsWith("/api/visits")) {
+    await handleVisitCount(req, res);
     return;
   }
   if (req.method === "POST" && req.url === "/api/snapshot") {
