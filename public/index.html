@@ -13,7 +13,7 @@
       href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Manrope:wght@300;400;500;600&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css?v=6" />
+    <link rel="stylesheet" href="styles.css?v=8" />
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
   </head>
   <body>
@@ -129,7 +129,14 @@
 
       <footer class="footer">
         <div class="daily-counter">
-          Сегодня посещений <strong id="daily-count">—</strong>
+          <span>Сегодня</span>
+          <strong id="daily-total">—</strong>
+          <span class="daily-sep">•</span>
+          <span>Уники</span>
+          <strong id="daily-unique">—</strong>
+          <span class="daily-sep">•</span>
+          <span>Повторы</span>
+          <strong id="daily-repeat">—</strong>
         </div>
       </footer>
     </div>
@@ -143,7 +150,7 @@
       });
 
       const script = document.createElement("script");
-      script.src = `app.js?v=15`;
+      script.src = `app.js?v=17`;
       script.defer = true;
       script.onload = () => {
         setTimeout(() => {

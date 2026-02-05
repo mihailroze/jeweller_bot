@@ -94,17 +94,49 @@ async function saveVisits(visits) {
   await fs.writeFile(VISITS_PATH, JSON.stringify(visits, null, 2), "utf-8");
 }
 
-async function incrementDailyVisit() {
-  const visits = await loadVisits();
-  const key = getDateKey();
-  visits[key] = (visits[key] || 0) + 1;
-  await saveVisits(visits);
-  return visits[key];
+function normalizeVisitEntry(entry) {
+  if (!entry) {
+    return { total: 0, unique_count: 0, unique_ids: {} };
+  }
+  if (typeof entry === "number") {
+    return { total: entry, unique_count: entry, unique_ids: {} };
+  }
+  return {
+    total: Number(entry.total) || 0,
+    unique_count: Number(entry.unique_count) || 0,
+    unique_ids: entry.unique_ids || {},
+  };
 }
 
-async function getDailyVisitCount(dateKey) {
+async function incrementDailyVisit(userId) {
   const visits = await loadVisits();
-  return visits[dateKey] || 0;
+  const key = getDateKey();
+  const entry = normalizeVisitEntry(visits[key]);
+  entry.total += 1;
+  if (userId) {
+    const id = String(userId);
+    if (!entry.unique_ids[id]) {
+      entry.unique_ids[id] = true;
+      entry.unique_count += 1;
+    }
+  }
+  visits[key] = entry;
+  await saveVisits(visits);
+  return {
+    total: entry.total,
+    unique: entry.unique_count,
+    repeats: Math.max(entry.total - entry.unique_count, 0),
+  };
+}
+
+async function getDailyVisitStats(dateKey) {
+  const visits = await loadVisits();
+  const entry = normalizeVisitEntry(visits[dateKey]);
+  return {
+    total: entry.total,
+    unique: entry.unique_count,
+    repeats: Math.max(entry.total - entry.unique_count, 0),
+  };
 }
 
 function sendJson(res, status, payload) {
@@ -127,8 +159,8 @@ async function handleVisit(req, res) {
         return;
       }
       await upsertUser(payload);
-      const count = await incrementDailyVisit();
-      sendJson(res, 200, { ok: true, count });
+      const stats = await incrementDailyVisit(payload.user_id);
+      sendJson(res, 200, { ok: true, ...stats });
     } catch (error) {
       sendJson(res, 400, { ok: false, error: "invalid json" });
     }
@@ -195,8 +227,8 @@ async function handleSnapshot(req, res) {
 async function handleVisitCount(req, res) {
   const url = new URL(req.url, `http://${req.headers.host}`);
   const date = url.searchParams.get("date") || getDateKey();
-  const count = await getDailyVisitCount(date);
-  sendJson(res, 200, { ok: true, date, count });
+  const stats = await getDailyVisitStats(date);
+  sendJson(res, 200, { ok: true, date, ...stats });
 }
 
 function isAdmin(userId) {

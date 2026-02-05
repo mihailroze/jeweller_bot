@@ -23,7 +23,9 @@ const elements = {
   empty: document.getElementById("empty"),
   canvas: document.getElementById("viewer"),
   error: document.getElementById("error"),
-  dailyCount: document.getElementById("daily-count"),
+  dailyTotal: document.getElementById("daily-total"),
+  dailyUnique: document.getElementById("daily-unique"),
+  dailyRepeat: document.getElementById("daily-repeat"),
   pickFileMobile: document.getElementById("pick-file-mobile"),
   resetView: document.getElementById("reset-view"),
   rotateLeft: document.getElementById("rotate-left"),
@@ -1221,14 +1223,26 @@ function readArrayBuffer(file) {
 }
 
 async function updateDailyCounter() {
-  if (!elements.dailyCount) return;
+  if (!elements.dailyTotal) return;
   try {
     const response = await fetch("/api/visits");
     if (!response.ok) throw new Error("bad response");
     const payload = await response.json();
-    const value = typeof payload.count === "number" ? payload.count : 0;
-    elements.dailyCount.textContent = String(value);
+    const total =
+      typeof payload.total === "number"
+        ? payload.total
+        : typeof payload.count === "number"
+        ? payload.count
+        : 0;
+    const unique = typeof payload.unique === "number" ? payload.unique : 0;
+    const repeat =
+      typeof payload.repeats === "number" ? payload.repeats : Math.max(0, total - unique);
+    elements.dailyTotal.textContent = String(total);
+    if (elements.dailyUnique) elements.dailyUnique.textContent = String(unique);
+    if (elements.dailyRepeat) elements.dailyRepeat.textContent = String(repeat);
   } catch (error) {
-    elements.dailyCount.textContent = "—";
+    elements.dailyTotal.textContent = "—";
+    if (elements.dailyUnique) elements.dailyUnique.textContent = "—";
+    if (elements.dailyRepeat) elements.dailyRepeat.textContent = "—";
   }
 }

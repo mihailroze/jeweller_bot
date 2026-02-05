@@ -111,7 +111,8 @@ h1 {
   color: var(--muted);
   margin: 0;
   white-space: nowrap;
-  font-size: clamp(0.75rem, 1.15vw, 1rem);
+  font-size: clamp(0.7rem, 1.05vw, 1rem);
+  letter-spacing: 0.2px;
 }
 
 .hero-card {
@@ -159,7 +160,9 @@ h1 {
   letter-spacing: 1.6px;
   font-size: 0.72rem;
   display: inline-flex;
-  gap: 10px;
+  flex-wrap: wrap;
+  column-gap: 12px;
+  row-gap: 6px;
   align-items: center;
   box-shadow: 0 12px 24px rgba(0, 0, 0, 0.35);
 }
@@ -168,6 +171,10 @@ h1 {
   color: var(--accent-soft);
   font-family: "Cinzel", serif;
   font-size: 1rem;
+}
+
+.daily-sep {
+  opacity: 0.5;
 }
 
 .panel {
@@ -541,6 +548,10 @@ select {
   .hero {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .hero p {
+    white-space: normal;
   }
 
   .viewer-wrap {
