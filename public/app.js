@@ -31,7 +31,7 @@ const state = {
   camera: null,
   renderer: null,
   controls: null,
-  lastVolume: 0,
+  rawVolume: 0,
 };
 
 function setStatus(message) {
@@ -44,44 +44,86 @@ function setMetrics(volumeCm3) {
   elements.weight.textContent = weight.toFixed(2);
 }
 
-function computeVolume(geometry) {
-  const position = geometry.attributes.position;
-  const index = geometry.index;
+function computeVolumeFromPositions(positions) {
+  let volume = 0;
+  for (let i = 0; i < positions.length; i += 9) {
+    const ax = positions[i];
+    const ay = positions[i + 1];
+    const az = positions[i + 2];
+    const bx = positions[i + 3];
+    const by = positions[i + 4];
+    const bz = positions[i + 5];
+    const cx = positions[i + 6];
+    const cy = positions[i + 7];
+    const cz = positions[i + 8];
+    volume +=
+      ax * (by * cz - bz * cy) -
+      ay * (bx * cz - bz * cx) +
+      az * (bx * cy - by * cx);
+  }
+  return Math.abs(volume / 6);
+}
+
+function isBinarySTL(buffer) {
+  if (buffer.byteLength < 84) return false;
+  const dv = new DataView(buffer);
+  const triCount = dv.getUint32(80, true);
+  const expected = 84 + triCount * 50;
+  return expected === buffer.byteLength;
+}
+
+function parseBinarySTL(buffer) {
+  const dv = new DataView(buffer);
+  const triCount = dv.getUint32(80, true);
+  const positions = new Float32Array(triCount * 9);
+  let offset = 84;
+  let p = 0;
   let volume = 0;
 
-  const getVertex = (i) => {
-    const ix = i * 3;
-    return {
-      x: position.array[ix],
-      y: position.array[ix + 1],
-      z: position.array[ix + 2],
-    };
-  };
+  for (let i = 0; i < triCount; i++) {
+    offset += 12; // normal
+    const ax = dv.getFloat32(offset, true);
+    offset += 4;
+    const ay = dv.getFloat32(offset, true);
+    offset += 4;
+    const az = dv.getFloat32(offset, true);
+    offset += 4;
+    const bx = dv.getFloat32(offset, true);
+    offset += 4;
+    const by = dv.getFloat32(offset, true);
+    offset += 4;
+    const bz = dv.getFloat32(offset, true);
+    offset += 4;
+    const cx = dv.getFloat32(offset, true);
+    offset += 4;
+    const cy = dv.getFloat32(offset, true);
+    offset += 4;
+    const cz = dv.getFloat32(offset, true);
+    offset += 4;
+    offset += 2; // attribute byte count
 
-  const addTriangle = (a, b, c) => {
+    positions[p++] = ax;
+    positions[p++] = ay;
+    positions[p++] = az;
+    positions[p++] = bx;
+    positions[p++] = by;
+    positions[p++] = bz;
+    positions[p++] = cx;
+    positions[p++] = cy;
+    positions[p++] = cz;
+
     volume +=
-      a.x * (b.y * c.z - b.z * c.y) -
-      a.y * (b.x * c.z - b.z * c.x) +
-      a.z * (b.x * c.y - b.y * c.x);
-  };
-
-  if (index) {
-    for (let i = 0; i < index.count; i += 3) {
-      const a = getVertex(index.array[i]);
-      const b = getVertex(index.array[i + 1]);
-      const c = getVertex(index.array[i + 2]);
-      addTriangle(a, b, c);
-    }
-  } else {
-    for (let i = 0; i < position.count; i += 3) {
-      const a = getVertex(i);
-      const b = getVertex(i + 1);
-      const c = getVertex(i + 2);
-      addTriangle(a, b, c);
-    }
+      ax * (by * cz - bz * cy) -
+      ay * (bx * cz - bz * cx) +
+      az * (bx * cy - by * cx);
   }
 
-  return Math.abs(volume / 6);
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  geometry.computeBoundingBox();
+  geometry.center();
+
+  return { geometry, volume: Math.abs(volume / 6) };
 }
 
 function disposeMesh(mesh) {
@@ -100,7 +142,11 @@ function fitCameraToObject(object) {
   let cameraZ = Math.abs(maxDim / (2 * Math.tan(fov / 2)));
   cameraZ *= 1.6;
 
-  state.camera.position.set(center.x + cameraZ, center.y + cameraZ * 0.6, center.z + cameraZ);
+  state.camera.position.set(
+    center.x + cameraZ,
+    center.y + cameraZ * 0.6,
+    center.z + cameraZ
+  );
   state.camera.near = maxDim / 100;
   state.camera.far = maxDim * 100;
   state.camera.updateProjectionMatrix();
@@ -120,10 +166,10 @@ function setupScene() {
     antialias: true,
     preserveDrawingBuffer: true,
   });
-  renderer.setPixelRatio(window.devicePixelRatio || 1);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
 
-  const ambient = new THREE.AmbientLight(0xffffff, 0.8);
-  const directional = new THREE.DirectionalLight(0xffffff, 0.9);
+  const ambient = new THREE.AmbientLight(0xffffff, 0.85);
+  const directional = new THREE.DirectionalLight(0xffffff, 0.7);
   directional.position.set(6, 12, 10);
   scene.add(ambient, directional);
 
@@ -154,44 +200,46 @@ function resizeRenderer() {
 
 function updateMetricsFromGeometry() {
   if (!state.geometry) return;
-  const rawVolume = computeVolume(state.geometry);
   const unit = elements.units.value;
-  const volumeCm3 = rawVolume * (UNIT_SCALE[unit] || 1);
-  state.lastVolume = volumeCm3;
+  const volumeCm3 = state.rawVolume * (UNIT_SCALE[unit] || 1);
   setMetrics(volumeCm3);
 }
 
 function loadGeometry(buffer) {
-  const loader = new STLLoader();
-  const geometry = loader.parse(buffer);
-  geometry.computeVertexNormals();
+  let geometry;
+  let volume;
 
-  geometry.computeBoundingBox();
-  const center = new THREE.Vector3();
-  geometry.boundingBox.getCenter(center);
-  geometry.translate(-center.x, -center.y, -center.z);
+  if (isBinarySTL(buffer)) {
+    const parsed = parseBinarySTL(buffer);
+    geometry = parsed.geometry;
+    volume = parsed.volume;
+  } else {
+    const loader = new STLLoader();
+    geometry = loader.parse(buffer);
+    geometry.computeBoundingBox();
+    geometry.center();
+    const positions = geometry.attributes.position.array;
+    volume = computeVolumeFromPositions(positions);
+  }
 
   disposeMesh(state.mesh);
 
-  const material = new THREE.MeshStandardMaterial({
-    color: 0xcaa06f,
-    roughness: 0.5,
-    metalness: 0.1,
-  });
+  const material = new THREE.MeshBasicMaterial({ color: 0xcaa06f });
   const mesh = new THREE.Mesh(geometry, material);
   state.scene.add(mesh);
 
   state.geometry = geometry;
   state.mesh = mesh;
+  state.rawVolume = volume;
 
   elements.empty.style.display = "none";
   fitCameraToObject(mesh);
   updateMetricsFromGeometry();
   setStatus("Готово. Можно вращать модель и делать скриншот.");
-  setTimeout(captureSnapshot, 120);
+  setTimeout(captureSnapshot, 80);
 }
 
-function handleFile(file) {
+async function handleFile(file) {
   if (!file) return;
   const lower = file.name.toLowerCase();
   if (!lower.endsWith(".stl")) {
@@ -200,11 +248,13 @@ function handleFile(file) {
   }
 
   elements.fileName.textContent = file.name;
-  const reader = new FileReader();
-  reader.onload = () => loadGeometry(reader.result);
-  reader.onerror = () => setStatus("Не удалось прочитать файл.");
-  reader.readAsArrayBuffer(file);
-  setStatus("Загружаю модель...");
+  try {
+    setStatus("Загружаю модель...");
+    const buffer = await file.arrayBuffer();
+    loadGeometry(buffer);
+  } catch (error) {
+    setStatus("Не удалось прочитать файл.");
+  }
 }
 
 function captureSnapshot() {
