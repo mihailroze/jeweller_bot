@@ -12,11 +12,8 @@ python -m http.server 8010 --directory public
 
 ## Деплой (Railway)
 
-Проект запускается из `Procfile`:
-
-```
-web: python -m http.server $PORT --directory public
-```
+Используется `Dockerfile` на базе `caddy:2-alpine`.
+Railway автоматически соберёт и запустит контейнер.
 
 ## Формат
 
