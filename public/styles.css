@@ -590,84 +590,6 @@ select {
   object-fit: contain;
 }
 
-.onehand-controls {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  display: none;
-  opacity: 0.95;
-}
-
-.thumbpad {
-  position: absolute;
-  right: 18px;
-  bottom: 18px;
-  width: 96px;
-  height: 96px;
-  border-radius: 50%;
-  border: 1px solid rgba(212, 175, 55, 0.45);
-  background: radial-gradient(
-    circle at 35% 30%,
-    rgba(212, 175, 55, 0.2),
-    rgba(8, 6, 5, 0.92)
-  );
-  box-shadow: 0 18px 30px rgba(0, 0, 0, 0.45);
-  pointer-events: auto;
-  touch-action: none;
-}
-
-.thumbpad::after {
-  content: "";
-  position: absolute;
-  inset: 12px;
-  border-radius: 50%;
-  border: 1px dashed rgba(212, 175, 55, 0.28);
-}
-
-.thumbpad-knob {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background: radial-gradient(circle at 30% 30%, #f3d38a, #a16f21);
-  transform: translate(-50%, -50%);
-  transition: transform 0.16s ease;
-  box-shadow: 0 10px 18px rgba(0, 0, 0, 0.35);
-}
-
-.zoom-control {
-  position: absolute;
-  left: 18px;
-  bottom: 18px;
-  padding: 6px 8px;
-  border-radius: var(--radius);
-  border: 1px solid rgba(212, 175, 55, 0.35);
-  background: rgba(10, 8, 7, 0.75);
-  display: grid;
-  gap: 4px;
-  align-items: center;
-  justify-items: center;
-  width: 44px;
-  height: 120px;
-  pointer-events: auto;
-}
-
-.zoom-control input[type="range"] {
-  width: 110px;
-  accent-color: var(--accent);
-  touch-action: none;
-  transform: rotate(-90deg);
-}
-
-.zoom-control span {
-  font-size: 0.6rem;
-  letter-spacing: 1px;
-  text-transform: uppercase;
-  color: var(--muted);
-  text-align: center;
-}
 
 @media (max-width: 720px) {
   .hero {
@@ -699,7 +621,4 @@ select {
     height: 280px;
   }
 
-  .onehand-controls {
-    display: block;
-  }
 }
