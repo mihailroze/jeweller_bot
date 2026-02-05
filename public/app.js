@@ -14,6 +14,8 @@ const elements = {
   fileCount: document.getElementById("file-count"),
   volume: document.getElementById("volume"),
   weight: document.getElementById("weight"),
+  dimensions: document.getElementById("dimensions"),
+  dimensionsUnit: document.getElementById("dimensions-unit"),
   volumeTotal: document.getElementById("volume-total"),
   weightTotal: document.getElementById("weight-total"),
   status: document.getElementById("status"),
@@ -58,6 +60,7 @@ const state = {
   },
   vertexCount: 0,
   rawVolume: 0,
+  rawDimensions: null,
   files: [],
   currentIndex: -1,
   loadId: 0,
@@ -112,6 +115,19 @@ function volumeToCm3(rawVolume) {
 
 function getTotalRawVolume() {
   return state.files.reduce((sum, entry) => sum + (entry.rawVolume || 0), 0);
+}
+
+function updateDimensions() {
+  if (!elements.dimensions) return;
+  const unit = elements.units.value === "cm" ? "см" : "мм";
+  if (elements.dimensionsUnit) elements.dimensionsUnit.textContent = unit;
+  if (!state.rawDimensions) {
+    elements.dimensions.textContent = "—";
+    return;
+  }
+  const format = (value) => Number(value).toFixed(2);
+  const { x, y, z } = state.rawDimensions;
+  elements.dimensions.textContent = `${format(x)} x ${format(y)} x ${format(z)}`;
 }
 
 function isBinarySTL(buffer) {
@@ -576,7 +592,7 @@ function render() {
 
   gl.uniformMatrix4fv(state.uniforms.mvp, false, mvp);
   gl.uniformMatrix3fv(state.uniforms.normal, false, normal);
-  gl.uniform3f(state.uniforms.color, 0.8, 0.62, 0.42);
+  gl.uniform3f(state.uniforms.color, 0.9, 0.72, 0.4);
 
   gl.bindBuffer(gl.ARRAY_BUFFER, state.buffers.position);
   gl.enableVertexAttribArray(state.attribs.position);
@@ -615,6 +631,7 @@ function updateMetrics() {
   const currentVolumeCm3 = volumeToCm3(currentRaw);
   const totalVolumeCm3 = volumeToCm3(getTotalRawVolume());
   setMetrics(currentVolumeCm3, totalVolumeCm3);
+  updateDimensions();
 }
 
 function setDailyCounters(payload) {
@@ -642,6 +659,11 @@ function handleParsed(parsed, options = {}) {
   }
 
   const maxDim = centerGeometry(parsed.positions, parsed.bounds);
+  state.rawDimensions = {
+    x: parsed.bounds.maxX - parsed.bounds.minX,
+    y: parsed.bounds.maxY - parsed.bounds.minY,
+    z: parsed.bounds.maxZ - parsed.bounds.minZ,
+  };
   state.rawVolume = parsed.volume;
   updateMetrics();
   uploadGeometry(parsed.positions, parsed.normals, maxDim);
@@ -660,6 +682,7 @@ function resetBatch() {
   state.files = [];
   state.currentIndex = -1;
   state.rawVolume = 0;
+  state.rawDimensions = null;
   updateMetrics();
   updateFileList();
   elements.fileName.textContent = "—";
@@ -962,16 +985,9 @@ function initWebGL() {
     attribute vec3 normal;
     uniform mat4 uMVP;
     uniform mat3 uNormal;
-    varying float vLight;
-    varying float vRim;
+    varying vec3 vNormal;
     void main() {
-      vec3 n = normalize(uNormal * normal);
-      vec3 lightA = normalize(vec3(0.4, 0.7, 0.5));
-      vec3 lightB = normalize(vec3(-0.6, 0.2, 0.7));
-      float diff = max(dot(n, lightA), 0.0) * 0.7 + max(dot(n, lightB), 0.0) * 0.3;
-      vLight = diff + 0.25;
-      float facing = max(dot(n, vec3(0.0, 0.0, 1.0)), 0.0);
-      vRim = pow(1.0 - facing, 2.0);
+      vNormal = normalize(uNormal * normal);
       gl_Position = uMVP * vec4(position, 1.0);
     }
   `;
@@ -979,12 +995,30 @@ function initWebGL() {
   const fsSource = `
     precision mediump float;
     uniform vec3 uColor;
-    varying float vLight;
-    varying float vRim;
+    varying vec3 vNormal;
     void main() {
-      vec3 base = uColor * vLight;
-      vec3 rim = vec3(1.0, 0.95, 0.85) * vRim * 0.35;
-      gl_FragColor = vec4(base + rim, 1.0);
+      vec3 n = normalize(vNormal);
+      vec3 viewDir = normalize(vec3(0.0, 0.0, 1.0));
+      vec3 lightA = normalize(vec3(0.55, 0.7, 0.35));
+      vec3 lightB = normalize(vec3(-0.6, 0.25, 0.7));
+
+      float diff =
+        max(dot(n, lightA), 0.0) * 0.75 +
+        max(dot(n, lightB), 0.0) * 0.35;
+
+      vec3 halfA = normalize(lightA + viewDir);
+      vec3 halfB = normalize(lightB + viewDir);
+      float spec =
+        pow(max(dot(n, halfA), 0.0), 40.0) +
+        pow(max(dot(n, halfB), 0.0), 60.0) * 0.6;
+
+      float fresnel = pow(1.0 - max(dot(n, viewDir), 0.0), 2.4);
+      float sheen = 0.28 + diff;
+      float topLight = clamp(n.y * 0.4 + 0.6, 0.0, 1.0);
+
+      vec3 base = uColor * sheen * mix(0.9, 1.05, topLight);
+      vec3 highlight = vec3(1.0, 0.93, 0.75) * (spec * 0.85 + fresnel * 0.25);
+      gl_FragColor = vec4(base + highlight, 1.0);
     }
   `;
 
