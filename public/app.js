@@ -19,7 +19,6 @@ const elements = {
   status: document.getElementById("status"),
   capture: document.getElementById("capture"),
   download: document.getElementById("download"),
-  shareWeb: document.getElementById("share-web"),
   shareTg: document.getElementById("share-tg"),
   snapshot: document.getElementById("snapshot"),
   empty: document.getElementById("empty"),
@@ -1177,28 +1176,6 @@ function bindEvents() {
   const shareText =
     "3D калькулятор объема моделей от Top Form. STL -> объем и вес восковки.";
 
-  const shareToBrowser = async () => {
-    const webUrl = state.shareConfig.webUrl || window.location.origin;
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: "Top Form 3D",
-          text: shareText,
-          url: webUrl,
-        });
-        return;
-      } catch (error) {}
-    }
-    if (navigator.clipboard?.writeText) {
-      try {
-        await navigator.clipboard.writeText(webUrl);
-        setStatus("Ссылка скопирована в буфер обмена.");
-        return;
-      } catch (error) {}
-    }
-    window.prompt("Скопируйте ссылку:", webUrl);
-  };
-
   const shareToTelegram = () => {
     const webUrl = state.shareConfig.webUrl || window.location.origin;
     const tgBotUrl = state.shareConfig.tgBotUrl || webUrl;
@@ -1213,12 +1190,6 @@ function bindEvents() {
       window.open(url, "_blank");
     }
   };
-
-  if (elements.shareWeb) {
-    elements.shareWeb.addEventListener("click", async () => {
-      await shareToBrowser();
-    });
-  }
 
   if (elements.shareTg) {
     elements.shareTg.addEventListener("click", () => {
