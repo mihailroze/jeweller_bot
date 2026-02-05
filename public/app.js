@@ -1184,7 +1184,7 @@ function bindEvents() {
 
     const updateKnob = (dx, dy, smooth) => {
       knob.style.transition = smooth ? "transform 0.16s ease" : "none";
-      knob.style.transform = `translate(${dx}px, ${dy}px)`;
+      knob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
     };
 
     const handleMove = (event) => {
