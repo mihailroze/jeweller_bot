@@ -107,12 +107,11 @@ h1 {
 }
 
 .hero p {
-  max-width: 520px;
+  max-width: 100%;
   color: var(--muted);
   margin: 0;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  font-size: clamp(0.75rem, 1.15vw, 1rem);
 }
 
 .hero-card {
