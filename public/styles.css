@@ -481,6 +481,10 @@ select {
   height: 360px;
   display: block;
   touch-action: none;
+  background:
+    radial-gradient(circle at 20% 15%, rgba(212, 175, 55, 0.22), transparent 55%),
+    radial-gradient(circle at 85% 10%, rgba(255, 255, 255, 0.08), transparent 50%),
+    linear-gradient(160deg, #0b0a09 0%, #14100d 55%, #2b1f14 100%);
 }
 
 .empty {

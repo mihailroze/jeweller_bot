@@ -552,7 +552,7 @@ function render() {
   const mvp = mat4Multiply(projection, mat4Multiply(view, model));
   const normal = buildNormalMatrix(state.rotation.yaw, state.rotation.pitch);
 
-  gl.clearColor(0.98, 0.96, 0.93, 1);
+  gl.clearColor(0, 0, 0, 0);
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
   gl.useProgram(state.program);
@@ -836,21 +836,53 @@ function captureSnapshot() {
   shot.height = baseCanvas.height;
   const ctx = shot.getContext("2d");
   if (!ctx) return;
+  const bg = ctx.createLinearGradient(0, 0, shot.width, shot.height);
+  bg.addColorStop(0, "#0b0a09");
+  bg.addColorStop(0.55, "#14100d");
+  bg.addColorStop(1, "#2b1f14");
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, shot.width, shot.height);
+
+  const glow = ctx.createRadialGradient(
+    shot.width * 0.78,
+    shot.height * 0.12,
+    0,
+    shot.width * 0.78,
+    shot.height * 0.12,
+    shot.width * 0.7
+  );
+  glow.addColorStop(0, "rgba(212, 175, 55, 0.2)");
+  glow.addColorStop(0.6, "rgba(212, 175, 55, 0.05)");
+  glow.addColorStop(1, "rgba(0, 0, 0, 0)");
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, shot.width, shot.height);
+
   ctx.drawImage(baseCanvas, 0, 0);
 
   const text = "@topform3d";
-  const padding = Math.max(12, Math.round(shot.width * 0.02));
-  const fontSize = Math.max(14, Math.round(shot.width * 0.035));
+  const padding = Math.max(16, Math.round(shot.width * 0.025));
+  const fontSize = Math.max(18, Math.round(shot.width * 0.04));
+  const boxHeight = Math.round(fontSize * 1.6);
+  const metrics = ctx.measureText(text);
+  const boxWidth = Math.round(metrics.width + fontSize * 1.6);
+  const x = shot.width - padding;
+  const y = shot.height - padding;
+
+  ctx.fillStyle = "rgba(5, 4, 3, 0.65)";
+  ctx.strokeStyle = "rgba(212, 175, 55, 0.55)";
+  ctx.lineWidth = Math.max(1, Math.round(fontSize * 0.08));
+  ctx.beginPath();
+  ctx.rect(x - boxWidth, y - boxHeight, boxWidth, boxHeight);
+  ctx.fill();
+  ctx.stroke();
+
   ctx.font = `600 ${fontSize}px "Manrope", sans-serif`;
   ctx.textAlign = "right";
-  ctx.textBaseline = "bottom";
-  ctx.shadowColor = "rgba(0, 0, 0, 0.55)";
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = "rgba(255, 235, 190, 0.95)";
+  ctx.shadowColor = "rgba(0, 0, 0, 0.6)";
   ctx.shadowBlur = Math.max(2, Math.round(fontSize * 0.18));
-  ctx.strokeStyle = "rgba(0, 0, 0, 0.45)";
-  ctx.lineWidth = Math.max(2, Math.round(fontSize * 0.12));
-  ctx.strokeText(text, shot.width - padding, shot.height - padding);
-  ctx.fillStyle = "rgba(255, 235, 190, 0.9)";
-  ctx.fillText(text, shot.width - padding, shot.height - padding);
+  ctx.fillText(text, x - fontSize * 0.4, y - boxHeight / 2);
   ctx.shadowBlur = 0;
 
   const dataUrl = shot.toDataURL("image/png");
