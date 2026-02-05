@@ -912,30 +912,44 @@ function captureSnapshot() {
   const volumeText = `Объём: ${elements.volume.textContent || "0.00"} см³`;
 
   const padding = Math.max(16, Math.round(shot.width * 0.025));
-  const fontSize = Math.max(18, Math.round(shot.width * 0.038));
-  const boxHeight = Math.round(fontSize * 1.9);
-  ctx.font = `600 ${fontSize}px "Manrope", sans-serif`;
-  const w1 = ctx.measureText(watermarkText).width;
+  const volumeSize = Math.max(18, Math.round(shot.width * 0.036));
+  const watermarkSize = Math.max(14, Math.round(volumeSize * 0.9));
+  const lineHeight = Math.round(Math.max(volumeSize, watermarkSize) * 1.25);
+  const innerPad = Math.round(volumeSize * 0.45);
+
+  ctx.font = `600 ${volumeSize}px "Manrope", sans-serif`;
   const w2 = ctx.measureText(volumeText).width;
-  const boxWidth = Math.round(Math.max(w1, w2) + fontSize * 1.6);
+  ctx.font = `600 ${watermarkSize}px "Manrope", sans-serif`;
+  const w1 = ctx.measureText(watermarkText).width;
+
+  const boxWidth = Math.round(Math.max(w1, w2) + innerPad * 2);
+  const boxHeight = Math.round(innerPad * 2 + lineHeight * 2);
   const x = shot.width - padding;
   const y = shot.height - padding;
+  const boxLeft = x - boxWidth;
+  const boxTop = y - boxHeight;
 
   ctx.fillStyle = "rgba(5, 4, 3, 0.65)";
   ctx.strokeStyle = "rgba(212, 175, 55, 0.55)";
-  ctx.lineWidth = Math.max(1, Math.round(fontSize * 0.08));
+  ctx.lineWidth = Math.max(1, Math.round(volumeSize * 0.08));
   ctx.beginPath();
-  ctx.rect(x - boxWidth, y - boxHeight, boxWidth, boxHeight);
+  ctx.rect(boxLeft, boxTop, boxWidth, boxHeight);
   ctx.fill();
   ctx.stroke();
 
+  const textX = x - innerPad;
+  const firstY = boxTop + innerPad;
+  const secondY = firstY + lineHeight;
+
   ctx.textAlign = "right";
-  ctx.textBaseline = "middle";
+  ctx.textBaseline = "top";
   ctx.fillStyle = "rgba(255, 235, 190, 0.95)";
   ctx.shadowColor = "rgba(0, 0, 0, 0.6)";
-  ctx.shadowBlur = Math.max(2, Math.round(fontSize * 0.18));
-  ctx.fillText(watermarkText, x - fontSize * 0.4, y - boxHeight * 0.65);
-  ctx.fillText(volumeText, x - fontSize * 0.4, y - boxHeight * 0.3);
+  ctx.shadowBlur = Math.max(2, Math.round(volumeSize * 0.18));
+  ctx.font = `600 ${watermarkSize}px "Manrope", sans-serif`;
+  ctx.fillText(watermarkText, textX, firstY);
+  ctx.font = `600 ${volumeSize}px "Manrope", sans-serif`;
+  ctx.fillText(volumeText, textX, secondY);
   ctx.shadowBlur = 0;
 
   const dataUrl = shot.toDataURL("image/png");
