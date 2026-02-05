@@ -16,6 +16,8 @@ const METALS_PATH = path.join(DATA_DIR, "metals.json");
 
 const BOT_TOKEN = process.env.BOT_TOKEN || "";
 const WEBAPP_URL = process.env.WEBAPP_URL || "";
+const BOT_USERNAME = process.env.BOT_USERNAME || "";
+const TG_BOT_LINK = process.env.TG_BOT_LINK || "";
 const ADMIN_IDS = new Set(
   (process.env.ADMIN_IDS || "")
     .split(",")
@@ -397,6 +399,16 @@ async function handleMetals(req, res) {
   });
 }
 
+async function handleConfig(req, res) {
+  const webUrl = getBaseUrl(req);
+  const tgBotUrl = getTelegramBotUrl();
+  sendJson(res, 200, {
+    ok: true,
+    web_url: webUrl,
+    tg_bot_url: tgBotUrl,
+  });
+}
+
 function sendJson(res, status, payload) {
   const body = JSON.stringify(payload);
   res.writeHead(status, {
@@ -437,6 +449,15 @@ function getBaseUrl(req) {
   const host = req.headers["x-forwarded-host"] || req.headers.host;
   if (!host) return "";
   return `${proto}://${host}`.replace(/\/+$/, "");
+}
+
+function getTelegramBotUrl() {
+  if (TG_BOT_LINK) return TG_BOT_LINK;
+  if (BOT_USERNAME) {
+    const clean = BOT_USERNAME.replace(/^@/, "").trim();
+    if (clean) return `https://t.me/${clean}`;
+  }
+  return "";
 }
 
 async function handleSnapshot(req, res) {
@@ -674,6 +695,10 @@ const server = http.createServer(async (req, res) => {
   }
   if (req.method === "GET" && req.url.startsWith("/api/visits")) {
     await handleVisitCount(req, res);
+    return;
+  }
+  if (req.method === "GET" && req.url.startsWith("/api/config")) {
+    await handleConfig(req, res);
     return;
   }
   if (req.method === "GET" && req.url.startsWith("/api/metals")) {

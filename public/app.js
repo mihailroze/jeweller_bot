@@ -74,6 +74,10 @@ const state = {
   pinch: { active: false, distance: 0 },
   snapshotUrl: null,
   snapshotDataUrl: null,
+  shareConfig: {
+    webUrl: window.location.origin,
+    tgBotUrl: "",
+  },
 };
 
 const CLIENT_ID_KEY = "tf_client_id";
@@ -1170,35 +1174,38 @@ function bindEvents() {
     });
   }
 
-  const shareUrl = window.location.origin;
   const shareText =
     "3D калькулятор объема моделей от Top Form. STL -> объем и вес восковки.";
 
   const shareToBrowser = async () => {
+    const webUrl = state.shareConfig.webUrl || window.location.origin;
     if (navigator.share) {
       try {
         await navigator.share({
           title: "Top Form 3D",
           text: shareText,
-          url: shareUrl,
+          url: webUrl,
         });
         return;
       } catch (error) {}
     }
     if (navigator.clipboard?.writeText) {
       try {
-        await navigator.clipboard.writeText(shareUrl);
+        await navigator.clipboard.writeText(webUrl);
         setStatus("Ссылка скопирована в буфер обмена.");
         return;
       } catch (error) {}
     }
-    window.prompt("Скопируйте ссылку:", shareUrl);
+    window.prompt("Скопируйте ссылку:", webUrl);
   };
 
   const shareToTelegram = () => {
+    const webUrl = state.shareConfig.webUrl || window.location.origin;
+    const tgBotUrl = state.shareConfig.tgBotUrl || webUrl;
+    const text = `${shareText}\n${webUrl}`;
     const url = `https://t.me/share/url?url=${encodeURIComponent(
-      shareUrl
-    )}&text=${encodeURIComponent(shareText)}`;
+      tgBotUrl
+    )}&text=${encodeURIComponent(text)}`;
     const tg = window.Telegram?.WebApp;
     if (tg?.openTelegramLink) {
       tg.openTelegramLink(url);
@@ -1232,6 +1239,7 @@ function init() {
     bindEvents();
     setStatus("Готово к загрузке STL.");
     saveUser();
+    loadShareConfig();
     updateMetals();
     scheduleRender(5);
   } catch (error) {
@@ -1375,6 +1383,18 @@ async function updateMetals() {
     if (elements.metalPt) elements.metalPt.textContent = "—";
     if (elements.metalPd) elements.metalPd.textContent = "—";
   }
+}
+
+async function loadShareConfig() {
+  try {
+    const response = await fetch(`/api/config?ts=${Date.now()}`, {
+      cache: "no-store",
+    });
+    if (!response.ok) throw new Error("bad response");
+    const payload = await response.json();
+    if (payload?.web_url) state.shareConfig.webUrl = payload.web_url;
+    if (payload?.tg_bot_url) state.shareConfig.tgBotUrl = payload.tg_bot_url;
+  } catch (error) {}
 }
 
 function getClientId() {
