@@ -105,50 +105,6 @@
       </section>
     </div>
 
-    <script>
-      const loadScript = (src) =>
-        new Promise((resolve, reject) => {
-          const script = document.createElement("script");
-          script.src = src;
-          script.onload = () => resolve(src);
-          script.onerror = () => reject(new Error(`Failed to load ${src}`));
-          document.head.appendChild(script);
-        });
-
-      const sources = [
-        [
-          "https://cdn.jsdelivr.net/npm/three@0.160.1/build/three.min.js",
-          "https://unpkg.com/three@0.160.1/build/three.min.js",
-        ],
-        [
-          "https://cdn.jsdelivr.net/npm/three@0.160.1/examples/js/controls/OrbitControls.js",
-          "https://unpkg.com/three@0.160.1/examples/js/controls/OrbitControls.js",
-        ],
-        [
-          "https://cdn.jsdelivr.net/npm/three@0.160.1/examples/js/loaders/STLLoader.js",
-          "https://unpkg.com/three@0.160.1/examples/js/loaders/STLLoader.js",
-        ],
-      ];
-
-      const boot = async () => {
-        for (const [primary, fallback] of sources) {
-          try {
-            await loadScript(primary);
-          } catch (error) {
-            await loadScript(fallback);
-          }
-        }
-        await loadScript("/app.js");
-      };
-
-      boot().catch((error) => {
-        const el = document.getElementById("error");
-        if (el) {
-          el.textContent =
-            "Не удалось загрузить библиотеки 3D. Проверьте интернет или попробуйте другой CDN.";
-        }
-        console.error(error);
-      });
-    </script>
+    <script src="/app.js"></script>
   </body>
 </html>
