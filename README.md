@@ -5,15 +5,22 @@
 ## Локальный запуск
 
 ```bash
-python -m http.server 8010 --directory public
+npm install
+npm run start
 ```
 
-Откройте `http://127.0.0.1:8010`.
+Откройте `http://127.0.0.1:3000`.
 
 ## Деплой (Railway)
 
-Используется `Dockerfile` на базе `caddy:2-alpine`.
+Используется `Dockerfile` на базе `node:20-alpine`.
 Railway автоматически соберёт и запустит контейнер.
+
+## Пользователи
+
+При запуске WebApp отправляет `/api/visit` с Telegram user_id.
+Список хранится в `data/users.json`.
+Для постоянного хранения в Railway подключите Volume к `/app/data`.
 
 ## Формат
 

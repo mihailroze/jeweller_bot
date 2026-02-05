@@ -41,6 +41,8 @@ const state = {
   renderFrames: 0,
   renderLoopActive: false,
   autoSpinFrames: 0,
+  zoom: 1,
+  pinch: { active: false, distance: 0 },
 };
 
 function setStatus(message) {
@@ -429,7 +431,8 @@ function render() {
 
   const aspect = elements.canvas.width / elements.canvas.height;
   const projection = mat4Perspective(Math.PI / 4, aspect, 0.1, 100);
-  const view = mat4LookAt([0, 0, 3], [0, 0, 0], [0, 1, 0]);
+  const distance = 3 / state.zoom;
+  const view = mat4LookAt([0, 0, distance], [0, 0, 0], [0, 1, 0]);
   const model = buildModelMatrix(
     state.rotation.yaw,
     state.rotation.pitch,
@@ -647,16 +650,51 @@ function bindEvents() {
     state.lastPointer = { x: event.clientX, y: event.clientY };
     state.rotation.yaw += dx * 0.005;
     state.rotation.pitch += dy * 0.005;
-    state.rotation.pitch = Math.max(
-      -1.4,
-      Math.min(1.4, state.rotation.pitch)
-    );
+    if (state.rotation.pitch > Math.PI) state.rotation.pitch -= Math.PI * 2;
+    if (state.rotation.pitch < -Math.PI) state.rotation.pitch += Math.PI * 2;
     scheduleRender(2);
   });
 
   elements.canvas.addEventListener("pointerup", (event) => {
     state.dragging = false;
     elements.canvas.releasePointerCapture(event.pointerId);
+  });
+
+  elements.canvas.addEventListener(
+    "wheel",
+    (event) => {
+      event.preventDefault();
+      const delta = Math.sign(event.deltaY) * 0.12;
+      state.zoom = Math.min(3.5, Math.max(0.4, state.zoom - delta));
+      scheduleRender(4);
+    },
+    { passive: false }
+  );
+
+  elements.canvas.addEventListener("touchstart", (event) => {
+    if (event.touches.length === 2) {
+      const dx = event.touches[0].clientX - event.touches[1].clientX;
+      const dy = event.touches[0].clientY - event.touches[1].clientY;
+      state.pinch.active = true;
+      state.pinch.distance = Math.hypot(dx, dy);
+    }
+  });
+
+  elements.canvas.addEventListener("touchmove", (event) => {
+    if (!state.pinch.active || event.touches.length !== 2) return;
+    const dx = event.touches[0].clientX - event.touches[1].clientX;
+    const dy = event.touches[0].clientY - event.touches[1].clientY;
+    const dist = Math.hypot(dx, dy);
+    if (state.pinch.distance > 0) {
+      const scale = dist / state.pinch.distance;
+      state.zoom = Math.min(3.5, Math.max(0.4, state.zoom * scale));
+      scheduleRender(4);
+    }
+    state.pinch.distance = dist;
+  });
+
+  elements.canvas.addEventListener("touchend", () => {
+    state.pinch.active = false;
   });
 
   window.addEventListener("resize", () => {
@@ -671,6 +709,7 @@ function init() {
     initWebGL();
     bindEvents();
     setStatus("Готово к загрузке STL.");
+    saveUser();
     scheduleRender(5);
   } catch (error) {
     setError("Ошибка запуска приложения.");
@@ -678,6 +717,33 @@ function init() {
 }
 
 init();
+
+function saveUser() {
+  const tg = window.Telegram?.WebApp;
+  const user = tg?.initDataUnsafe?.user;
+  if (!user || !user.id) return;
+  const payload = {
+    user_id: user.id,
+    username: user.username || null,
+    first_name: user.first_name || null,
+    last_name: user.last_name || null,
+    language_code: user.language_code || null,
+    platform: tg?.platform || null,
+    ts: Date.now(),
+  };
+
+  const body = JSON.stringify(payload);
+  const blob = new Blob([body], { type: "application/json" });
+  if (navigator.sendBeacon) {
+    navigator.sendBeacon("/api/visit", blob);
+  } else {
+    fetch("/api/visit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body,
+    }).catch(() => {});
+  }
+}
 
 function scheduleRender(frames) {
   state.renderFrames = Math.max(state.renderFrames, frames);

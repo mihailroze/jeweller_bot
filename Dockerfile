@@ -1,5 +1,10 @@
-FROM caddy:2-alpine
+FROM node:20-alpine
 
-COPY public /usr/share/caddy
+WORKDIR /app
 
-CMD ["sh", "-c", "caddy file-server --root /usr/share/caddy --listen :${PORT:-80}"]
+COPY package.json server.js ./
+COPY public ./public
+
+RUN mkdir -p /app/data
+
+CMD ["node", "server.js"]
