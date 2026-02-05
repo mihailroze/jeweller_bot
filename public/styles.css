@@ -521,6 +521,10 @@ select {
   margin-top: 16px;
 }
 
+#share-app {
+  border-style: dashed;
+}
+
 .note {
   margin-top: 14px;
   color: var(--muted);

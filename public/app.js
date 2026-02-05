@@ -19,6 +19,7 @@ const elements = {
   status: document.getElementById("status"),
   capture: document.getElementById("capture"),
   download: document.getElementById("download"),
+  shareApp: document.getElementById("share-app"),
   snapshot: document.getElementById("snapshot"),
   empty: document.getElementById("empty"),
   canvas: document.getElementById("viewer"),
@@ -1165,6 +1166,36 @@ function bindEvents() {
       state.rotation = { yaw: 0.6, pitch: -0.4 };
       state.zoom = 1;
       scheduleRender(10);
+    });
+  }
+
+  if (elements.shareApp) {
+    elements.shareApp.addEventListener("click", async () => {
+      const shareUrl = window.location.origin;
+      const shareText =
+        "3D калькулятор объема моделей от Top Form. STL -> объем и вес восковки.";
+      const tg = window.Telegram?.WebApp;
+      if (tg?.openTelegramLink) {
+        const url = `https://t.me/share/url?url=${encodeURIComponent(
+          shareUrl
+        )}&text=${encodeURIComponent(shareText)}`;
+        tg.openTelegramLink(url);
+        return;
+      }
+      if (navigator.share) {
+        try {
+          await navigator.share({ title: "Top Form 3D", text: shareText, url: shareUrl });
+          return;
+        } catch (error) {}
+      }
+      if (navigator.clipboard?.writeText) {
+        try {
+          await navigator.clipboard.writeText(shareUrl);
+          setStatus("Ссылка скопирована в буфер обмена.");
+          return;
+        } catch (error) {}
+      }
+      window.prompt("Скопируйте ссылку:", shareUrl);
     });
   }
 
