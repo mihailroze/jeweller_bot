@@ -2,6 +2,7 @@ import http from "http";
 import fs from "fs/promises";
 import path from "path";
 import { fileURLToPath } from "url";
+import { randomUUID } from "crypto";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -9,6 +10,7 @@ const __dirname = path.dirname(__filename);
 const PUBLIC_DIR = path.join(__dirname, "public");
 const DATA_DIR = path.join(__dirname, "data");
 const USERS_PATH = path.join(DATA_DIR, "users.json");
+const SNAPSHOT_DIR = path.join(DATA_DIR, "snapshots");
 
 const BOT_TOKEN = process.env.BOT_TOKEN || "";
 const WEBAPP_URL = process.env.WEBAPP_URL || "";
@@ -33,6 +35,10 @@ const MIME = {
 
 async function ensureDataDir() {
   await fs.mkdir(DATA_DIR, { recursive: true });
+}
+
+async function ensureSnapshotDir() {
+  await fs.mkdir(SNAPSHOT_DIR, { recursive: true });
 }
 
 async function loadUsers() {
@@ -90,6 +96,63 @@ async function handleVisit(req, res) {
       }
       await upsertUser(payload);
       sendJson(res, 200, { ok: true });
+    } catch (error) {
+      sendJson(res, 400, { ok: false, error: "invalid json" });
+    }
+  });
+}
+
+function getBaseUrl(req) {
+  if (WEBAPP_URL) return WEBAPP_URL.replace(/\/+$/, "");
+  const proto = req.headers["x-forwarded-proto"] || "http";
+  const host = req.headers["x-forwarded-host"] || req.headers.host;
+  if (!host) return "";
+  return `${proto}://${host}`.replace(/\/+$/, "");
+}
+
+async function handleSnapshot(req, res) {
+  let data = "";
+  let aborted = false;
+
+  req.on("data", (chunk) => {
+    if (aborted) return;
+    data += chunk;
+    if (data.length > 8_000_000) {
+      aborted = true;
+      sendJson(res, 413, { ok: false, error: "payload too large" });
+      req.destroy();
+    }
+  });
+
+  req.on("end", async () => {
+    if (aborted) return;
+    try {
+      const payload = JSON.parse(data || "{}");
+      const dataUrl = payload.dataUrl || "";
+      const prefix = "data:image/png;base64,";
+      const base64 = dataUrl.startsWith(prefix)
+        ? dataUrl.slice(prefix.length)
+        : payload.base64 || "";
+      if (!base64) {
+        sendJson(res, 400, { ok: false, error: "dataUrl required" });
+        return;
+      }
+
+      const buffer = Buffer.from(base64, "base64");
+      if (!buffer.length) {
+        sendJson(res, 400, { ok: false, error: "invalid data" });
+        return;
+      }
+
+      await ensureSnapshotDir();
+      const id = randomUUID();
+      const filename = `${id}.png`;
+      const filePath = path.join(SNAPSHOT_DIR, filename);
+      await fs.writeFile(filePath, buffer);
+
+      const baseUrl = getBaseUrl(req);
+      const url = baseUrl ? `${baseUrl}/snapshots/${filename}` : `/snapshots/${filename}`;
+      sendJson(res, 200, { ok: true, url });
     } catch (error) {
       sendJson(res, 400, { ok: false, error: "invalid json" });
     }
@@ -220,6 +283,29 @@ async function handleTelegramUpdate(update) {
   }
 }
 
+async function serveSnapshot(req, res) {
+  const url = new URL(req.url, `http://${req.headers.host}`);
+  const filename = path.basename(url.pathname);
+  if (!filename || !filename.endsWith(".png")) {
+    res.writeHead(404);
+    res.end();
+    return;
+  }
+  const filePath = path.join(SNAPSHOT_DIR, filename);
+  try {
+    const content = await fs.readFile(filePath);
+    res.writeHead(200, {
+      "Content-Type": "image/png",
+      "Content-Length": content.length,
+      "Cache-Control": "public, max-age=604800",
+    });
+    res.end(content);
+  } catch (error) {
+    res.writeHead(404);
+    res.end();
+  }
+}
+
 async function serveStatic(req, res) {
   const url = new URL(req.url, `http://${req.headers.host}`);
   let pathname = url.pathname;
@@ -250,6 +336,10 @@ const server = http.createServer(async (req, res) => {
     await handleVisit(req, res);
     return;
   }
+  if (req.method === "POST" && req.url === "/api/snapshot") {
+    await handleSnapshot(req, res);
+    return;
+  }
   if (req.method === "POST" && req.url === "/telegram/webhook") {
     let data = "";
     req.on("data", (chunk) => (data += chunk));
@@ -262,6 +352,10 @@ const server = http.createServer(async (req, res) => {
         sendJson(res, 400, { ok: false });
       }
     });
+    return;
+  }
+  if (req.method === "GET" && req.url.startsWith("/snapshots/")) {
+    await serveSnapshot(req, res);
     return;
   }
   await serveStatic(req, res);

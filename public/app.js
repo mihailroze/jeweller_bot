@@ -701,6 +701,27 @@ function ensureSnapshot() {
   return state.snapshotDataUrl || elements.snapshot.getAttribute("src") || "";
 }
 
+async function uploadSnapshot(dataUrl) {
+  try {
+    const response = await fetch("/api/snapshot", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ dataUrl }),
+    });
+    if (!response.ok) return null;
+    const result = await response.json();
+    if (result?.ok && result.url) {
+      if (state.snapshotUrl && state.snapshotUrl.startsWith("blob:")) {
+        URL.revokeObjectURL(state.snapshotUrl);
+      }
+      state.snapshotUrl = result.url;
+      elements.download.href = result.url;
+      return result.url;
+    }
+  } catch (error) {}
+  return null;
+}
+
 async function parseFileForRender(file) {
   const buffer = await readArrayBuffer(file);
   const binary = isBinarySTL(buffer);
@@ -805,6 +826,10 @@ async function handleFiles(fileList) {
 function captureSnapshot() {
   if (!state.gl || state.vertexCount === 0) return;
   render();
+  if (state.snapshotUrl && state.snapshotUrl.startsWith("blob:")) {
+    URL.revokeObjectURL(state.snapshotUrl);
+  }
+  state.snapshotUrl = null;
   const dataUrl = elements.canvas.toDataURL("image/png");
   state.snapshotDataUrl = dataUrl;
   elements.snapshot.src = dataUrl;
@@ -815,18 +840,24 @@ function captureSnapshot() {
   if (elements.canvas.toBlob) {
     elements.canvas.toBlob((blob) => {
       if (!blob) return;
-      state.snapshotUrl = URL.createObjectURL(blob);
-      elements.download.href = state.snapshotUrl;
+      if (!/^https?:/i.test(state.snapshotUrl || "")) {
+        state.snapshotUrl = URL.createObjectURL(blob);
+        elements.download.href = state.snapshotUrl;
+      }
     }, "image/png");
   } else {
     fetch(dataUrl)
       .then((res) => res.blob())
       .then((blob) => {
-        state.snapshotUrl = URL.createObjectURL(blob);
-        elements.download.href = state.snapshotUrl;
+        if (!/^https?:/i.test(state.snapshotUrl || "")) {
+          state.snapshotUrl = URL.createObjectURL(blob);
+          elements.download.href = state.snapshotUrl;
+        }
       })
       .catch(() => {});
   }
+
+  uploadSnapshot(dataUrl);
 }
 
 function initWebGL() {
@@ -936,9 +967,12 @@ function bindEvents() {
   });
 
   if (elements.openPng) {
-    elements.openPng.addEventListener("click", () => {
+    elements.openPng.addEventListener("click", async () => {
       const dataUrl = ensureSnapshot();
-      const url = state.snapshotUrl || dataUrl;
+      const remoteUrl = /^https?:/i.test(state.snapshotUrl || "")
+        ? state.snapshotUrl
+        : await uploadSnapshot(dataUrl);
+      const url = remoteUrl || state.snapshotUrl || dataUrl;
       if (!url) return;
       const tg = window.Telegram?.WebApp;
       if (tg?.openLink && /^https?:/i.test(url)) {
@@ -951,9 +985,12 @@ function bindEvents() {
 
   const isTelegram = Boolean(window.Telegram?.WebApp);
   const isIOS = /iPad|iPhone|iPod/i.test(navigator.userAgent);
-  elements.download.addEventListener("click", (event) => {
+  elements.download.addEventListener("click", async (event) => {
     const dataUrl = ensureSnapshot();
-    const url = state.snapshotUrl || dataUrl;
+    const remoteUrl = /^https?:/i.test(state.snapshotUrl || "")
+      ? state.snapshotUrl
+      : await uploadSnapshot(dataUrl);
+    const url = remoteUrl || state.snapshotUrl || dataUrl;
     if (!url) return;
     elements.download.href = url;
     if (!isTelegram && !isIOS) return;
