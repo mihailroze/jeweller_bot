@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>3D Объём — Telegram WebApp</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:wght@600;700&family=Sora:wght@300;400;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles.css" />
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  </head>
+  <body>
+    <div class="glow"></div>
+    <div class="app">
+      <header class="hero">
+        <div>
+          <span class="tag">Telegram WebApp · Ювелир</span>
+          <h1>Калькулятор объёма 3D‑моделей</h1>
+          <p>
+            Загрузи STL, получи объём в см³ и вес восковки. Скриншот
+            сохраняется автоматически.
+          </p>
+        </div>
+        <div class="hero-card">
+          <div class="hero-row">
+            <span>Плотность воска</span>
+            <strong>0.8 г/см³</strong>
+          </div>
+          <div class="hero-row">
+            <span>Формат</span>
+            <strong>STL</strong>
+          </div>
+          <div class="hero-row">
+            <span>Режим</span>
+            <strong>Локально</strong>
+          </div>
+        </div>
+      </header>
+
+      <section class="workspace">
+        <div class="panel controls">
+          <div class="upload" id="drop-zone">
+            <input id="file-input" type="file" accept=".stl" />
+            <div class="upload-info">
+              <h3>Перетащи STL сюда</h3>
+              <p>или выбери файл с диска</p>
+            </div>
+            <button class="btn" id="file-button">Выбрать STL</button>
+          </div>
+
+          <div class="settings">
+            <div class="field">
+              <label for="units">Единицы модели</label>
+              <select id="units">
+                <option value="mm">мм</option>
+                <option value="cm">см</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Файл</label>
+              <div class="value" id="file-name">—</div>
+            </div>
+          </div>
+
+          <div class="metrics">
+            <div class="metric">
+              <span>Объём</span>
+              <strong id="volume">0.00</strong>
+              <small>см³</small>
+            </div>
+            <div class="metric">
+              <span>Вес восковки</span>
+              <strong id="weight">0.00</strong>
+              <small>г</small>
+            </div>
+          </div>
+
+          <div class="actions">
+            <button class="btn primary" id="capture">Скриншот модели</button>
+            <a class="btn ghost" id="download" download="model.png"
+              >Скачать PNG</a
+            >
+          </div>
+
+          <p class="note" id="status">
+            Загрузите STL‑модель, чтобы начать расчёт.
+          </p>
+        </div>
+
+        <div class="panel viewer">
+          <div class="viewer-wrap">
+            <canvas id="viewer"></canvas>
+            <div class="empty" id="empty">Модель ещё не загружена</div>
+          </div>
+          <div class="snapshot">
+            <div class="snapshot-title">Скриншот</div>
+            <img id="snapshot" alt="Скриншот модели" />
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>
