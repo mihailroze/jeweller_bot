@@ -61,6 +61,7 @@ const state = {
   zoom: 1,
   pinch: { active: false, distance: 0 },
   snapshotUrl: null,
+  snapshotDataUrl: null,
 };
 
 function setStatus(message) {
@@ -633,6 +634,7 @@ function resetBatch() {
     URL.revokeObjectURL(state.snapshotUrl);
     state.snapshotUrl = null;
   }
+  state.snapshotDataUrl = null;
   elements.download.removeAttribute("href");
   scheduleRender(2);
 }
@@ -690,6 +692,13 @@ function updateFileList() {
   if (elements.fileCount) {
     elements.fileCount.textContent = state.files.length;
   }
+}
+
+function ensureSnapshot() {
+  if (!state.snapshotDataUrl) {
+    captureSnapshot();
+  }
+  return state.snapshotDataUrl || elements.snapshot.getAttribute("src") || "";
 }
 
 async function parseFileForRender(file) {
@@ -797,19 +806,27 @@ function captureSnapshot() {
   if (!state.gl || state.vertexCount === 0) return;
   render();
   const dataUrl = elements.canvas.toDataURL("image/png");
+  state.snapshotDataUrl = dataUrl;
   elements.snapshot.src = dataUrl;
+  elements.download.href = dataUrl;
   if (state.snapshotUrl) {
     URL.revokeObjectURL(state.snapshotUrl);
   }
-  fetch(dataUrl)
-    .then((res) => res.blob())
-    .then((blob) => {
+  if (elements.canvas.toBlob) {
+    elements.canvas.toBlob((blob) => {
+      if (!blob) return;
       state.snapshotUrl = URL.createObjectURL(blob);
       elements.download.href = state.snapshotUrl;
-    })
-    .catch(() => {
-      elements.download.href = dataUrl;
-    });
+    }, "image/png");
+  } else {
+    fetch(dataUrl)
+      .then((res) => res.blob())
+      .then((blob) => {
+        state.snapshotUrl = URL.createObjectURL(blob);
+        elements.download.href = state.snapshotUrl;
+      })
+      .catch(() => {});
+  }
 }
 
 function initWebGL() {
@@ -920,11 +937,11 @@ function bindEvents() {
 
   if (elements.openPng) {
     elements.openPng.addEventListener("click", () => {
-      const rawSrc = elements.snapshot.getAttribute("src") || "";
-      const url = state.snapshotUrl || rawSrc;
+      const dataUrl = ensureSnapshot();
+      const url = state.snapshotUrl || dataUrl;
       if (!url) return;
       const tg = window.Telegram?.WebApp;
-      if (tg?.openLink) {
+      if (tg?.openLink && /^https?:/i.test(url)) {
         tg.openLink(url);
       } else {
         window.open(url, "_blank");
@@ -935,13 +952,14 @@ function bindEvents() {
   const isTelegram = Boolean(window.Telegram?.WebApp);
   const isIOS = /iPad|iPhone|iPod/i.test(navigator.userAgent);
   elements.download.addEventListener("click", (event) => {
-    if (!isTelegram && !isIOS) return;
-    const rawSrc = elements.snapshot.getAttribute("src") || "";
-    const url = state.snapshotUrl || rawSrc;
+    const dataUrl = ensureSnapshot();
+    const url = state.snapshotUrl || dataUrl;
     if (!url) return;
+    elements.download.href = url;
+    if (!isTelegram && !isIOS) return;
     event.preventDefault();
     const tg = window.Telegram?.WebApp;
-    if (tg?.openLink) {
+    if (tg?.openLink && /^https?:/i.test(url)) {
       tg.openLink(url);
     } else {
       window.open(url, "_blank");
