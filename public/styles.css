@@ -216,6 +216,87 @@ h1 {
   margin-top: 16px;
 }
 
+.file-list {
+  margin-top: 16px;
+  padding: 12px;
+  border-radius: 16px;
+  background: rgba(12, 10, 9, 0.75);
+  border: 1px solid rgba(212, 175, 55, 0.2);
+}
+
+.file-list-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+#file-count {
+  font-weight: 600;
+  color: var(--accent-soft);
+}
+
+.file-list-body {
+  margin-top: 10px;
+  display: grid;
+  gap: 8px;
+  max-height: 220px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.file-item {
+  border: 1px solid rgba(212, 175, 55, 0.2);
+  background: rgba(8, 6, 5, 0.75);
+  border-radius: 12px;
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  width: 100%;
+}
+
+.file-item:hover {
+  border-color: rgba(212, 175, 55, 0.5);
+}
+
+.file-item.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px rgba(212, 175, 55, 0.35);
+}
+
+.file-item-name {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--ink);
+  word-break: break-word;
+}
+
+.file-item-meta {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  font-size: 0.75rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.file-item-meta span {
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(212, 175, 55, 0.2);
+  background: rgba(12, 10, 9, 0.8);
+}
+
 .field label {
   font-size: 0.75rem;
   text-transform: uppercase;

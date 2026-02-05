@@ -10,8 +10,12 @@ const elements = {
   fileButton: document.getElementById("file-button"),
   units: document.getElementById("units"),
   fileName: document.getElementById("file-name"),
+  fileList: document.getElementById("file-list"),
+  fileCount: document.getElementById("file-count"),
   volume: document.getElementById("volume"),
   weight: document.getElementById("weight"),
+  volumeTotal: document.getElementById("volume-total"),
+  weightTotal: document.getElementById("weight-total"),
   status: document.getElementById("status"),
   capture: document.getElementById("capture"),
   download: document.getElementById("download"),
@@ -43,6 +47,10 @@ const state = {
   },
   vertexCount: 0,
   rawVolume: 0,
+  files: [],
+  currentIndex: -1,
+  loadId: 0,
+  selectToken: 0,
   scale: 1,
   rotation: { yaw: 0.6, pitch: -0.4 },
   dragging: false,
@@ -63,10 +71,29 @@ function setError(message) {
   if (elements.error) elements.error.textContent = message || "";
 }
 
-function setMetrics(volumeCm3) {
-  const weight = volumeCm3 * WAX_DENSITY;
-  elements.volume.textContent = volumeCm3.toFixed(2);
-  elements.weight.textContent = weight.toFixed(2);
+function setMetrics(currentVolumeCm3, totalVolumeCm3) {
+  const currentWeight = currentVolumeCm3 * WAX_DENSITY;
+  const totalWeight = totalVolumeCm3 * WAX_DENSITY;
+  elements.volume.textContent = currentVolumeCm3.toFixed(2);
+  elements.weight.textContent = currentWeight.toFixed(2);
+  if (elements.volumeTotal) {
+    elements.volumeTotal.textContent = totalVolumeCm3.toFixed(2);
+  }
+  if (elements.weightTotal) {
+    elements.weightTotal.textContent = totalWeight.toFixed(2);
+  }
+}
+
+function getUnitScale() {
+  return UNIT_SCALE[elements.units.value] || 1;
+}
+
+function volumeToCm3(rawVolume) {
+  return rawVolume * getUnitScale();
+}
+
+function getTotalRawVolume() {
+  return state.files.reduce((sum, entry) => sum + (entry.rawVolume || 0), 0);
 }
 
 function isBinarySTL(buffer) {
@@ -243,6 +270,79 @@ function parseAsciiSTL(buffer) {
     volume: Math.abs(volume / 6),
     bounds: { minX, minY, minZ, maxX, maxY, maxZ },
   };
+}
+
+function parseBinarySTLVolume(buffer) {
+  const dv = new DataView(buffer);
+  const triCount = dv.getUint32(80, true);
+  let offset = 84;
+  let volume = 0;
+
+  for (let i = 0; i < triCount; i++) {
+    offset += 12;
+    const ax = dv.getFloat32(offset, true);
+    offset += 4;
+    const ay = dv.getFloat32(offset, true);
+    offset += 4;
+    const az = dv.getFloat32(offset, true);
+    offset += 4;
+    const bx = dv.getFloat32(offset, true);
+    offset += 4;
+    const by = dv.getFloat32(offset, true);
+    offset += 4;
+    const bz = dv.getFloat32(offset, true);
+    offset += 4;
+    const cx = dv.getFloat32(offset, true);
+    offset += 4;
+    const cy = dv.getFloat32(offset, true);
+    offset += 4;
+    const cz = dv.getFloat32(offset, true);
+    offset += 4;
+    offset += 2;
+
+    volume +=
+      ax * (by * cz - bz * cy) -
+      ay * (bx * cz - bz * cx) +
+      az * (bx * cy - by * cx);
+  }
+
+  return Math.abs(volume / 6);
+}
+
+function parseAsciiSTLVolume(buffer) {
+  const text = new TextDecoder().decode(buffer);
+  const regex = /vertex\s+([0-9eE+.\-]+)\s+([0-9eE+.\-]+)\s+([0-9eE+.\-]+)/g;
+  let verts = [];
+  let volume = 0;
+
+  let match;
+  while ((match = regex.exec(text)) !== null) {
+    const x = parseFloat(match[1]);
+    const y = parseFloat(match[2]);
+    const z = parseFloat(match[3]);
+    verts.push(x, y, z);
+
+    if (verts.length === 9) {
+      const ax = verts[0];
+      const ay = verts[1];
+      const az = verts[2];
+      const bx = verts[3];
+      const by = verts[4];
+      const bz = verts[5];
+      const cx = verts[6];
+      const cy = verts[7];
+      const cz = verts[8];
+
+      volume +=
+        ax * (by * cz - bz * cy) -
+        ay * (bx * cz - bz * cx) +
+        az * (bx * cy - by * cx);
+
+      verts = [];
+    }
+  }
+
+  return Math.abs(volume / 6);
 }
 
 function centerGeometry(positions, bounds) {
@@ -492,12 +592,14 @@ function uploadGeometry(positions, normals, maxDim) {
 }
 
 function updateMetrics() {
-  const unit = elements.units.value;
-  const volumeCm3 = state.rawVolume * (UNIT_SCALE[unit] || 1);
-  setMetrics(volumeCm3);
+  const currentEntry = state.files[state.currentIndex];
+  const currentRaw = currentEntry ? currentEntry.rawVolume || 0 : state.rawVolume;
+  const currentVolumeCm3 = volumeToCm3(currentRaw);
+  const totalVolumeCm3 = volumeToCm3(getTotalRawVolume());
+  setMetrics(currentVolumeCm3, totalVolumeCm3);
 }
 
-function handleParsed(parsed) {
+function handleParsed(parsed, options = {}) {
   if (!parsed.positions.length) {
     setError("Файл не содержит треугольников.");
     return;
@@ -508,33 +610,186 @@ function handleParsed(parsed) {
   updateMetrics();
   uploadGeometry(parsed.positions, parsed.normals, maxDim);
   elements.empty.style.display = "none";
-  setStatus("Готово. Можно вращать модель и делать скриншот.");
-  state.autoSpinFrames = 120;
-  setTimeout(captureSnapshot, 120);
+  setStatus(
+    options.statusMessage ||
+      "Готово. Можно вращать модель и делать скриншот."
+  );
+  state.autoSpinFrames = options.autoSpin === false ? 0 : 120;
+  if (options.capture !== false) {
+    setTimeout(captureSnapshot, 120);
+  }
 }
 
-async function handleFile(file) {
-  if (!file) return;
-  const lower = file.name.toLowerCase();
-  if (!lower.endsWith(".stl")) {
+function resetBatch() {
+  state.files = [];
+  state.currentIndex = -1;
+  state.rawVolume = 0;
+  updateMetrics();
+  updateFileList();
+  elements.fileName.textContent = "—";
+  elements.empty.style.display = "grid";
+  elements.snapshot.removeAttribute("src");
+  if (state.snapshotUrl) {
+    URL.revokeObjectURL(state.snapshotUrl);
+    state.snapshotUrl = null;
+  }
+  elements.download.removeAttribute("href");
+  scheduleRender(2);
+}
+
+function updateFileName(entry, index) {
+  if (!entry) {
+    elements.fileName.textContent = "—";
+    return;
+  }
+  const total = state.files.length;
+  const prefix = total > 1 ? `${index + 1}/${total} - ` : "";
+  elements.fileName.textContent = `${prefix}${entry.name}`;
+}
+
+function updateFileList() {
+  if (!elements.fileList) return;
+  elements.fileList.innerHTML = "";
+  const scale = getUnitScale();
+
+  state.files.forEach((entry, index) => {
+    const item = document.createElement("button");
+    item.type = "button";
+    item.className = `file-item${index === state.currentIndex ? " active" : ""}`;
+    item.addEventListener("click", () => selectFile(index));
+
+    const name = document.createElement("div");
+    name.className = "file-item-name";
+    name.textContent = entry.name;
+
+    const meta = document.createElement("div");
+    meta.className = "file-item-meta";
+
+    if (entry.status === "pending") {
+      const badge = document.createElement("span");
+      badge.textContent = "расчёт...";
+      meta.appendChild(badge);
+    } else if (entry.status === "error") {
+      const badge = document.createElement("span");
+      badge.textContent = "ошибка";
+      meta.appendChild(badge);
+    } else {
+      const volume = (entry.rawVolume || 0) * scale;
+      const weight = volume * WAX_DENSITY;
+      const volumeBadge = document.createElement("span");
+      volumeBadge.textContent = `${volume.toFixed(2)} см³`;
+      const weightBadge = document.createElement("span");
+      weightBadge.textContent = `${weight.toFixed(2)} г`;
+      meta.append(volumeBadge, weightBadge);
+    }
+
+    item.append(name, meta);
+    elements.fileList.appendChild(item);
+  });
+
+  if (elements.fileCount) {
+    elements.fileCount.textContent = state.files.length;
+  }
+}
+
+async function parseFileForRender(file) {
+  const buffer = await readArrayBuffer(file);
+  const binary = isBinarySTL(buffer);
+  return binary ? parseBinarySTL(buffer) : parseAsciiSTL(buffer);
+}
+
+async function parseFileVolumeOnly(file) {
+  const buffer = await readArrayBuffer(file);
+  const binary = isBinarySTL(buffer);
+  return binary ? parseBinarySTLVolume(buffer) : parseAsciiSTLVolume(buffer);
+}
+
+async function selectFile(index) {
+  const entry = state.files[index];
+  if (!entry) return;
+  if (state.currentIndex === index && state.vertexCount > 0) return;
+
+  state.currentIndex = index;
+  updateFileName(entry, index);
+  updateFileList();
+  updateMetrics();
+
+  if (entry.status !== "ready") {
+    setStatus("Файл ещё обрабатывается. Подождите.");
+    return;
+  }
+
+  const token = (state.selectToken += 1);
+  setStatus(`Загружаю модель: ${entry.name}...`);
+  setError("");
+
+  try {
+    const parsed = await parseFileForRender(entry.file);
+    if (token !== state.selectToken) return;
+    entry.rawVolume = parsed.volume;
+    updateFileList();
+    handleParsed(parsed, {
+      statusMessage: "Готово. Можно вращать модель и делать скриншот.",
+    });
+  } catch (error) {
+    setError("Не удалось прочитать STL. Проверьте файл.");
+  }
+}
+
+async function handleFiles(fileList) {
+  const files = Array.from(fileList || []);
+  const stlFiles = files.filter((file) =>
+    file.name.toLowerCase().endsWith(".stl")
+  );
+  if (!stlFiles.length) {
     setStatus("Нужен STL‑файл (binary или ASCII).");
     return;
   }
 
-  elements.fileName.textContent = file.name;
-  setStatus("Загружаю модель...");
-  setError("");
+  resetBatch();
+  const loadId = (state.loadId += 1);
 
-  try {
-    const buffer = await readArrayBuffer(file);
-    const binary = isBinarySTL(buffer);
-    const parsed = binary ? parseBinarySTL(buffer) : parseAsciiSTL(buffer);
-    if (!binary) {
-      setStatus("ASCII STL обрабатывается дольше. Лучше использовать binary.");
+  state.files = stlFiles.map((file) => ({
+    file,
+    name: file.name,
+    rawVolume: 0,
+    status: "pending",
+  }));
+
+  updateFileList();
+  setStatus(`Загружаю ${state.files.length} моделей...`);
+  setError("");
+  if (elements.fileInput) elements.fileInput.value = "";
+
+  for (const entry of state.files) {
+    if (loadId !== state.loadId) return;
+
+    try {
+      if (state.currentIndex === -1) {
+        const parsed = await parseFileForRender(entry.file);
+        entry.rawVolume = parsed.volume;
+        entry.status = "ready";
+        state.currentIndex = state.files.indexOf(entry);
+        updateFileName(entry, state.currentIndex);
+        handleParsed(parsed);
+      } else {
+        const volume = await parseFileVolumeOnly(entry.file);
+        entry.rawVolume = volume;
+        entry.status = "ready";
+      }
+    } catch (error) {
+      entry.status = "error";
     }
-    handleParsed(parsed);
-  } catch (error) {
-    setError("Не удалось прочитать STL. Проверьте файл.");
+
+    updateFileList();
+    updateMetrics();
+  }
+
+  const hasReady = state.files.some((entry) => entry.status === "ready");
+  if (!hasReady) {
+    setStatus("Не удалось загрузить STL‑модели. Проверьте файлы.");
+  } else if (state.files.length > 1) {
+    setStatus("Готово. Выберите модель из списка для просмотра.");
   }
 }
 
@@ -632,7 +887,7 @@ function initTelegram() {
 function bindEvents() {
   elements.fileButton.addEventListener("click", () => elements.fileInput.click());
   elements.fileInput.addEventListener("change", (event) =>
-    handleFile(event.target.files[0])
+    handleFiles(event.target.files)
   );
   if (elements.pickFileMobile) {
     elements.pickFileMobile.addEventListener("click", () =>
@@ -650,12 +905,12 @@ function bindEvents() {
   elements.dropZone.addEventListener("drop", (event) => {
     event.preventDefault();
     elements.dropZone.classList.remove("hover");
-    const file = event.dataTransfer.files[0];
-    handleFile(file);
+    handleFiles(event.dataTransfer.files);
   });
 
   elements.units.addEventListener("change", () => {
     updateMetrics();
+    updateFileList();
     scheduleRender(5);
   });
 
@@ -665,7 +920,8 @@ function bindEvents() {
 
   if (elements.openPng) {
     elements.openPng.addEventListener("click", () => {
-      const url = state.snapshotUrl || elements.snapshot.src;
+      const rawSrc = elements.snapshot.getAttribute("src") || "";
+      const url = state.snapshotUrl || rawSrc;
       if (!url) return;
       const tg = window.Telegram?.WebApp;
       if (tg?.openLink) {
@@ -680,7 +936,8 @@ function bindEvents() {
   const isIOS = /iPad|iPhone|iPod/i.test(navigator.userAgent);
   elements.download.addEventListener("click", (event) => {
     if (!isTelegram && !isIOS) return;
-    const url = state.snapshotUrl || elements.snapshot.src;
+    const rawSrc = elements.snapshot.getAttribute("src") || "";
+    const url = state.snapshotUrl || rawSrc;
     if (!url) return;
     event.preventDefault();
     const tg = window.Telegram?.WebApp;
