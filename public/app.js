@@ -80,12 +80,7 @@ function parseBinarySTL(buffer) {
   let maxZ = -Infinity;
 
   for (let i = 0; i < triCount; i++) {
-    const nx = dv.getFloat32(offset, true);
-    offset += 4;
-    const ny = dv.getFloat32(offset, true);
-    offset += 4;
-    const nz = dv.getFloat32(offset, true);
-    offset += 4;
+    offset += 12; // skip stored normal
 
     const ax = dv.getFloat32(offset, true);
     offset += 4;
@@ -116,6 +111,20 @@ function parseBinarySTL(buffer) {
     positions[p++] = cx;
     positions[p++] = cy;
     positions[p++] = cz;
+
+    const abx = bx - ax;
+    const aby = by - ay;
+    const abz = bz - az;
+    const acx = cx - ax;
+    const acy = cy - ay;
+    const acz = cz - az;
+    let nx = aby * acz - abz * acy;
+    let ny = abz * acx - abx * acz;
+    let nz = abx * acy - aby * acx;
+    const len = Math.hypot(nx, ny, nz) || 1;
+    nx /= len;
+    ny /= len;
+    nz /= len;
 
     for (let j = 0; j < 3; j++) {
       normals[n++] = nx;
@@ -268,15 +277,56 @@ function mat4Identity() {
 
 function mat4Multiply(a, b) {
   const out = new Float32Array(16);
-  for (let i = 0; i < 4; i++) {
-    for (let j = 0; j < 4; j++) {
-      out[i * 4 + j] =
-        a[i * 4 + 0] * b[0 * 4 + j] +
-        a[i * 4 + 1] * b[1 * 4 + j] +
-        a[i * 4 + 2] * b[2 * 4 + j] +
-        a[i * 4 + 3] * b[3 * 4 + j];
-    }
-  }
+  const a00 = a[0],
+    a01 = a[1],
+    a02 = a[2],
+    a03 = a[3];
+  const a10 = a[4],
+    a11 = a[5],
+    a12 = a[6],
+    a13 = a[7];
+  const a20 = a[8],
+    a21 = a[9],
+    a22 = a[10],
+    a23 = a[11];
+  const a30 = a[12],
+    a31 = a[13],
+    a32 = a[14],
+    a33 = a[15];
+
+  const b00 = b[0],
+    b01 = b[1],
+    b02 = b[2],
+    b03 = b[3];
+  const b10 = b[4],
+    b11 = b[5],
+    b12 = b[6],
+    b13 = b[7];
+  const b20 = b[8],
+    b21 = b[9],
+    b22 = b[10],
+    b23 = b[11];
+  const b30 = b[12],
+    b31 = b[13],
+    b32 = b[14],
+    b33 = b[15];
+
+  out[0] = a00 * b00 + a01 * b10 + a02 * b20 + a03 * b30;
+  out[1] = a10 * b00 + a11 * b10 + a12 * b20 + a13 * b30;
+  out[2] = a20 * b00 + a21 * b10 + a22 * b20 + a23 * b30;
+  out[3] = a30 * b00 + a31 * b10 + a32 * b20 + a33 * b30;
+  out[4] = a00 * b01 + a01 * b11 + a02 * b21 + a03 * b31;
+  out[5] = a10 * b01 + a11 * b11 + a12 * b21 + a13 * b31;
+  out[6] = a20 * b01 + a21 * b11 + a22 * b21 + a23 * b31;
+  out[7] = a30 * b01 + a31 * b11 + a32 * b21 + a33 * b31;
+  out[8] = a00 * b02 + a01 * b12 + a02 * b22 + a03 * b32;
+  out[9] = a10 * b02 + a11 * b12 + a12 * b22 + a13 * b32;
+  out[10] = a20 * b02 + a21 * b12 + a22 * b22 + a23 * b32;
+  out[11] = a30 * b02 + a31 * b12 + a32 * b22 + a33 * b32;
+  out[12] = a00 * b03 + a01 * b13 + a02 * b23 + a03 * b33;
+  out[13] = a10 * b03 + a11 * b13 + a12 * b23 + a13 * b33;
+  out[14] = a20 * b03 + a21 * b13 + a22 * b23 + a23 * b33;
+  out[15] = a30 * b03 + a31 * b13 + a32 * b23 + a33 * b33;
   return out;
 }
 
@@ -349,15 +399,15 @@ function buildModelMatrix(yaw, pitch, scale) {
 
   return new Float32Array([
     r00 * scale,
-    r01 * scale,
-    r02 * scale,
-    0,
     r10 * scale,
-    r11 * scale,
-    r12 * scale,
-    0,
     r20 * scale,
+    0,
+    r01 * scale,
+    r11 * scale,
     r21 * scale,
+    0,
+    r02 * scale,
+    r12 * scale,
     r22 * scale,
     0,
     0,
@@ -373,16 +423,26 @@ function buildNormalMatrix(yaw, pitch) {
   const cx = Math.cos(pitch);
   const sx = Math.sin(pitch);
 
+  const r00 = cy;
+  const r01 = sy * sx;
+  const r02 = sy * cx;
+  const r10 = 0;
+  const r11 = cx;
+  const r12 = -sx;
+  const r20 = -sy;
+  const r21 = cy * sx;
+  const r22 = cy * cx;
+
   return new Float32Array([
-    cy,
-    sy * sx,
-    sy * cx,
-    0,
-    cx,
-    -sx,
-    -sy,
-    cy * sx,
-    cy * cx,
+    r00,
+    r10,
+    r20,
+    r01,
+    r11,
+    r21,
+    r02,
+    r12,
+    r22,
   ]);
 }
 
@@ -490,7 +550,7 @@ async function handleFile(file) {
   setError("");
 
   try {
-    const buffer = await file.arrayBuffer();
+    const buffer = await readArrayBuffer(file);
     const binary = isBinarySTL(buffer);
     const parsed = binary ? parseBinarySTL(buffer) : parseAsciiSTL(buffer);
     if (!binary) {
@@ -646,3 +706,15 @@ function init() {
 }
 
 init();
+
+function readArrayBuffer(file) {
+  if (file.arrayBuffer) {
+    return file.arrayBuffer();
+  }
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsArrayBuffer(file);
+  });
+}
