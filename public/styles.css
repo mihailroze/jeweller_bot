@@ -240,6 +240,12 @@ select {
   font-size: 0.9rem;
 }
 
+.error {
+  margin-top: 8px;
+  color: #9b2d24;
+  font-size: 0.85rem;
+}
+
 .viewer-wrap {
   position: relative;
   border-radius: 18px;

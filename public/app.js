@@ -1,6 +1,6 @@
-import * as THREE from "https://unpkg.com/three@0.160.1/build/three.module.js";
-import { STLLoader } from "https://unpkg.com/three@0.160.1/examples/jsm/loaders/STLLoader.js";
-import { OrbitControls } from "https://unpkg.com/three@0.160.1/examples/jsm/controls/OrbitControls.js";
+const THREE = window.THREE;
+const OrbitControls = THREE?.OrbitControls;
+const STLLoader = THREE?.STLLoader;
 
 const WAX_DENSITY = 0.8;
 const UNIT_SCALE = {
@@ -22,6 +22,7 @@ const elements = {
   snapshot: document.getElementById("snapshot"),
   empty: document.getElementById("empty"),
   canvas: document.getElementById("viewer"),
+  error: document.getElementById("error"),
 };
 
 const state = {
@@ -36,6 +37,12 @@ const state = {
 
 function setStatus(message) {
   elements.status.textContent = message;
+}
+
+function setError(message) {
+  if (elements.error) {
+    elements.error.textContent = message || "";
+  }
 }
 
 function setMetrics(volumeCm3) {
@@ -214,12 +221,17 @@ function loadGeometry(buffer) {
     geometry = parsed.geometry;
     volume = parsed.volume;
   } else {
+    if (!STLLoader) {
+      setError("ASCII STL требует STLLoader. Проверьте загрузку библиотек.");
+      return;
+    }
     const loader = new STLLoader();
     geometry = loader.parse(buffer);
     geometry.computeBoundingBox();
     geometry.center();
     const positions = geometry.attributes.position.array;
     volume = computeVolumeFromPositions(positions);
+    setStatus("ASCII STL обрабатывается дольше. Лучше использовать binary STL.");
   }
 
   disposeMesh(state.mesh);
@@ -250,6 +262,7 @@ async function handleFile(file) {
   elements.fileName.textContent = file.name;
   try {
     setStatus("Загружаю модель...");
+    setError("");
     const buffer = await file.arrayBuffer();
     loadGeometry(buffer);
   } catch (error) {
@@ -277,34 +290,47 @@ function initTelegram() {
   }
 }
 
-elements.fileButton.addEventListener("click", () => elements.fileInput.click());
-elements.fileInput.addEventListener("change", (event) =>
-  handleFile(event.target.files[0])
-);
+function wireEvents() {
+  elements.fileButton.addEventListener("click", () => elements.fileInput.click());
+  elements.fileInput.addEventListener("change", (event) =>
+    handleFile(event.target.files[0])
+  );
 
-elements.dropZone.addEventListener("dragover", (event) => {
-  event.preventDefault();
-  elements.dropZone.classList.add("hover");
-});
-elements.dropZone.addEventListener("dragleave", () =>
-  elements.dropZone.classList.remove("hover")
-);
-elements.dropZone.addEventListener("drop", (event) => {
-  event.preventDefault();
-  elements.dropZone.classList.remove("hover");
-  const file = event.dataTransfer.files[0];
-  handleFile(file);
-});
+  elements.dropZone.addEventListener("dragover", (event) => {
+    event.preventDefault();
+    elements.dropZone.classList.add("hover");
+  });
+  elements.dropZone.addEventListener("dragleave", () =>
+    elements.dropZone.classList.remove("hover")
+  );
+  elements.dropZone.addEventListener("drop", (event) => {
+    event.preventDefault();
+    elements.dropZone.classList.remove("hover");
+    const file = event.dataTransfer.files[0];
+    handleFile(file);
+  });
 
-elements.units.addEventListener("change", () => {
-  updateMetricsFromGeometry();
-});
+  elements.units.addEventListener("change", () => {
+    updateMetricsFromGeometry();
+  });
 
-elements.capture.addEventListener("click", () => {
-  captureSnapshot();
-});
+  elements.capture.addEventListener("click", () => {
+    captureSnapshot();
+  });
 
-window.addEventListener("resize", resizeRenderer);
+  window.addEventListener("resize", resizeRenderer);
+}
 
-initTelegram();
-setupScene();
+function init() {
+  if (!THREE || !OrbitControls) {
+    setError(
+      "Не удалось загрузить Three.js. Проверьте соединение или CDN."
+    );
+    return;
+  }
+  initTelegram();
+  setupScene();
+  wireEvents();
+}
+
+init();
