@@ -105,6 +105,20 @@
       </section>
     </div>
 
-    <script src="/app.js"></script>
+    <script>
+      window.__APP_READY__ = false;
+    </script>
+    <script src="/app.js" defer></script>
+    <script>
+      setTimeout(() => {
+        if (!window.__APP_READY__) {
+          const el = document.getElementById("error");
+          if (el) {
+            el.textContent =
+              "app.js не загрузился. Проверьте доступность файла /app.js.";
+          }
+        }
+      }, 2000);
+    </script>
   </body>
 </html>

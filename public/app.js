@@ -21,6 +21,8 @@ const elements = {
   error: document.getElementById("error"),
 };
 
+window.__APP_READY__ = true;
+
 const state = {
   gl: null,
   program: null,
@@ -488,14 +490,16 @@ async function handleFile(file) {
   setError("");
 
   try {
-    const buffer = await file.arrayBuffer();
-    const parsed = isBinarySTL(buffer)
-      ? parseBinarySTL(buffer)
-      : parseAsciiSTL(buffer);
-    if (!isBinarySTL(buffer)) {
-      setStatus("ASCII STL обрабатывается дольше. Лучше использовать binary.");
-    }
-    handleParsed(parsed);
+    const buffer = await readArrayBuffer(file);
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    setTimeout(() => {
+      const isBinary = isBinarySTL(buffer);
+      const parsed = isBinary ? parseBinarySTL(buffer) : parseAsciiSTL(buffer);
+      if (!isBinary) {
+        setStatus("ASCII STL обрабатывается дольше. Лучше использовать binary.");
+      }
+      handleParsed(parsed);
+    }, 10);
   } catch (error) {
     setError("Не удалось прочитать STL. Проверьте файл.");
   }
@@ -638,6 +642,19 @@ function init() {
   initTelegram();
   initWebGL();
   bindEvents();
+  setStatus("Готово к загрузке STL.");
 }
 
 init();
+
+function readArrayBuffer(file) {
+  if (file.arrayBuffer) {
+    return file.arrayBuffer();
+  }
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsArrayBuffer(file);
+  });
+}
