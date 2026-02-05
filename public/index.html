@@ -107,14 +107,41 @@
 
     <script>
       window.__APP_READY__ = false;
-    </script>
-    <script src="app.js?v=1" defer></script>
-    <script>
+      window.__APP_ERROR__ = null;
+
+      window.addEventListener("error", (event) => {
+        window.__APP_ERROR__ = event.message || "Unknown error";
+      });
+
+      const script = document.createElement("script");
+      script.src = `app.js?v=2`;
+      script.defer = true;
+      script.onload = () => {
+        setTimeout(() => {
+          if (!window.__APP_READY__) {
+            const el = document.getElementById("error");
+            if (el) {
+              el.textContent =
+                "app.js загрузился, но не выполнился. Откройте WebApp в браузере и посмотрите ошибки.";
+            }
+          }
+        }, 50);
+      };
+      script.onerror = () => {
+        const el = document.getElementById("error");
+        if (el) {
+          el.textContent =
+            "app.js не загрузился. Проверьте доступность файла app.js.";
+        }
+      };
+      document.head.appendChild(script);
+
       setTimeout(() => {
         if (!window.__APP_READY__) {
           const el = document.getElementById("error");
           if (el) {
             el.textContent =
+              window.__APP_ERROR__ ||
               "app.js не загрузился. Проверьте доступность файла app.js.";
           }
         }

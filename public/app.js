@@ -490,16 +490,13 @@ async function handleFile(file) {
   setError("");
 
   try {
-    const buffer = await readArrayBuffer(file);
-    await new Promise((resolve) => requestAnimationFrame(resolve));
-    setTimeout(() => {
-      const isBinary = isBinarySTL(buffer);
-      const parsed = isBinary ? parseBinarySTL(buffer) : parseAsciiSTL(buffer);
-      if (!isBinary) {
-        setStatus("ASCII STL обрабатывается дольше. Лучше использовать binary.");
-      }
-      handleParsed(parsed);
-    }, 10);
+    const buffer = await file.arrayBuffer();
+    const binary = isBinarySTL(buffer);
+    const parsed = binary ? parseBinarySTL(buffer) : parseAsciiSTL(buffer);
+    if (!binary) {
+      setStatus("ASCII STL обрабатывается дольше. Лучше использовать binary.");
+    }
+    handleParsed(parsed);
   } catch (error) {
     setError("Не удалось прочитать STL. Проверьте файл.");
   }
@@ -547,8 +544,7 @@ function initWebGL() {
   `;
 
   try {
-    const program = createProgram(gl, vsSource, fsSource);
-    state.program = program;
+    state.program = createProgram(gl, vsSource, fsSource);
   } catch (error) {
     setError("Ошибка инициализации WebGL.");
     return;
@@ -639,22 +635,14 @@ function bindEvents() {
 }
 
 function init() {
-  initTelegram();
-  initWebGL();
-  bindEvents();
-  setStatus("Готово к загрузке STL.");
+  try {
+    initTelegram();
+    initWebGL();
+    bindEvents();
+    setStatus("Готово к загрузке STL.");
+  } catch (error) {
+    setError("Ошибка запуска приложения.");
+  }
 }
 
 init();
-
-function readArrayBuffer(file) {
-  if (file.arrayBuffer) {
-    return file.arrayBuffer();
-  }
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = () => reject(reader.error);
-    reader.readAsArrayBuffer(file);
-  });
-}
