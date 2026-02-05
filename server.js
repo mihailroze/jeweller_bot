@@ -532,15 +532,12 @@ async function telegramRequest(method, payload) {
 }
 
 function makeWebAppKeyboard() {
-  if (!WEBAPP_URL) {
-    return {
-      keyboard: [[{ text: "Открыть WebApp (URL не задан)" }]],
-      resize_keyboard: true,
-    };
-  }
+  if (!WEBAPP_URL) return null;
   return {
-    keyboard: [[{ text: "Открыть калькулятор", web_app: { url: WEBAPP_URL } }]],
-    resize_keyboard: true,
+    inline_keyboard: [
+      [{ text: "Открыть калькулятор", web_app: { url: WEBAPP_URL } }],
+      [{ text: "Открыть в браузере", url: WEBAPP_URL }],
+    ],
   };
 }
 
@@ -607,11 +604,28 @@ async function handleTelegramUpdate(update) {
   if (!chatId) return;
 
   if (text.startsWith("/start")) {
-    await telegramRequest("sendMessage", {
-      chat_id: chatId,
-      text: "Откройте калькулятор по кнопке ниже.",
-      reply_markup: makeWebAppKeyboard(),
-    });
+    const intro =
+      "Top Form — 3D калькулятор объёма моделей.\n" +
+      "Что умеет: считает объём STL в см³, вес восковки, делает скриншот.\n\n" +
+      "Как пользоваться:\n" +
+      "1) Нажмите кнопку «Открыть калькулятор».\n" +
+      "2) Загрузите STL (можно несколько).\n" +
+      "3) Получите объём, вес и PNG‑скриншот.\n";
+    const keyboard = makeWebAppKeyboard();
+    if (keyboard) {
+      await telegramRequest("sendMessage", {
+        chat_id: chatId,
+        text: intro,
+        reply_markup: keyboard,
+      });
+    } else {
+      await telegramRequest("sendMessage", {
+        chat_id: chatId,
+        text:
+          intro +
+          "\nАдминистратор не настроил WEBAPP_URL, кнопка пока недоступна.",
+      });
+    }
     return;
   }
 
