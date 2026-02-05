@@ -19,8 +19,8 @@ const elements = {
   status: document.getElementById("status"),
   capture: document.getElementById("capture"),
   download: document.getElementById("download"),
-  shareApp: document.getElementById("share-app"),
-  shareMenu: document.getElementById("share-menu"),
+  shareWeb: document.getElementById("share-web"),
+  shareTg: document.getElementById("share-tg"),
   snapshot: document.getElementById("snapshot"),
   empty: document.getElementById("empty"),
   canvas: document.getElementById("viewer"),
@@ -1170,93 +1170,52 @@ function bindEvents() {
     });
   }
 
-  if (elements.shareApp) {
-    const shareUrl = window.location.origin;
-    const shareText =
-      "3D калькулятор объема моделей от Top Form. STL -> объем и вес восковки.";
+  const shareUrl = window.location.origin;
+  const shareText =
+    "3D калькулятор объема моделей от Top Form. STL -> объем и вес восковки.";
 
-    const closeMenu = () => {
-      if (elements.shareMenu) {
-        elements.shareMenu.classList.remove("is-open");
-        elements.shareMenu.setAttribute("aria-hidden", "true");
-      }
-    };
-
-    const openMenu = () => {
-      if (elements.shareMenu) {
-        elements.shareMenu.classList.add("is-open");
-        elements.shareMenu.setAttribute("aria-hidden", "false");
-      }
-    };
-
-    const toggleMenu = () => {
-      if (!elements.shareMenu) return;
-      const isOpen = elements.shareMenu.classList.contains("is-open");
-      if (isOpen) closeMenu();
-      else openMenu();
-    };
-
-    const shareToBrowser = async () => {
-      if (navigator.share) {
-        try {
-          await navigator.share({
-            title: "Top Form 3D",
-            text: shareText,
-            url: shareUrl,
-          });
-          return;
-        } catch (error) {}
-      }
-      if (navigator.clipboard?.writeText) {
-        try {
-          await navigator.clipboard.writeText(shareUrl);
-          setStatus("Ссылка скопирована в буфер обмена.");
-          return;
-        } catch (error) {}
-      }
-      window.prompt("Скопируйте ссылку:", shareUrl);
-    };
-
-    const shareToTelegram = () => {
-      const url = `https://t.me/share/url?url=${encodeURIComponent(
-        shareUrl
-      )}&text=${encodeURIComponent(shareText)}`;
-      const tg = window.Telegram?.WebApp;
-      if (tg?.openTelegramLink) {
-        tg.openTelegramLink(url);
-      } else {
-        window.open(url, "_blank");
-      }
-    };
-
-    elements.shareApp.addEventListener("click", (event) => {
-      event.stopPropagation();
-      toggleMenu();
-    });
-
-    if (elements.shareMenu) {
-      elements.shareMenu.addEventListener("click", async (event) => {
-        const target = event.target.closest(".share-option");
-        if (!target) return;
-        const type = target.getAttribute("data-share");
-        closeMenu();
-        if (type === "tg") {
-          shareToTelegram();
-        } else {
-          await shareToBrowser();
-        }
-      });
-    }
-
-    document.addEventListener("click", (event) => {
-      if (!elements.shareMenu || !elements.shareApp) return;
-      if (
-        elements.shareMenu.contains(event.target) ||
-        elements.shareApp.contains(event.target)
-      ) {
+  const shareToBrowser = async () => {
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: "Top Form 3D",
+          text: shareText,
+          url: shareUrl,
+        });
         return;
-      }
-      closeMenu();
+      } catch (error) {}
+    }
+    if (navigator.clipboard?.writeText) {
+      try {
+        await navigator.clipboard.writeText(shareUrl);
+        setStatus("Ссылка скопирована в буфер обмена.");
+        return;
+      } catch (error) {}
+    }
+    window.prompt("Скопируйте ссылку:", shareUrl);
+  };
+
+  const shareToTelegram = () => {
+    const url = `https://t.me/share/url?url=${encodeURIComponent(
+      shareUrl
+    )}&text=${encodeURIComponent(shareText)}`;
+    const tg = window.Telegram?.WebApp;
+    if (tg?.openTelegramLink) {
+      tg.openTelegramLink(url);
+    } else {
+      window.open(url, "_blank");
+    }
+  };
+
+  if (elements.shareWeb) {
+    elements.shareWeb.addEventListener("click", async () => {
+      await shareToBrowser();
+    });
+  }
+
+  if (elements.shareTg) {
+    elements.shareTg.addEventListener("click", () => {
+      shareToTelegram();
     });
   }
 

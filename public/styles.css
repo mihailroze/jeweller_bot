@@ -519,34 +519,11 @@ select {
   flex-wrap: wrap;
   gap: 10px;
   margin-top: 16px;
-  position: relative;
 }
 
-#share-app {
+#share-web,
+#share-tg {
   border-style: dashed;
-}
-
-.share-menu {
-  position: absolute;
-  top: 100%;
-  right: 0;
-  margin-top: 8px;
-  padding: 10px;
-  border-radius: var(--radius);
-  border: 1px solid rgba(212, 175, 55, 0.35);
-  background: rgba(10, 8, 7, 0.92);
-  box-shadow: 0 16px 30px rgba(0, 0, 0, 0.45);
-  display: none;
-  gap: 8px;
-  z-index: 5;
-}
-
-.share-menu.is-open {
-  display: grid;
-}
-
-.share-option {
-  width: 160px;
 }
 
 .note {
