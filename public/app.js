@@ -23,9 +23,17 @@ const elements = {
   empty: document.getElementById("empty"),
   canvas: document.getElementById("viewer"),
   error: document.getElementById("error"),
-  dailyTotal: document.getElementById("daily-total"),
-  dailyUnique: document.getElementById("daily-unique"),
-  dailyRepeat: document.getElementById("daily-repeat"),
+  tgTotal: document.getElementById("tg-total"),
+  tgUnique: document.getElementById("tg-unique"),
+  tgRepeat: document.getElementById("tg-repeat"),
+  webTotal: document.getElementById("web-total"),
+  webUnique: document.getElementById("web-unique"),
+  webRepeat: document.getElementById("web-repeat"),
+  metalDate: document.getElementById("metal-date"),
+  metalAu: document.getElementById("metal-au"),
+  metalAg: document.getElementById("metal-ag"),
+  metalPt: document.getElementById("metal-pt"),
+  metalPd: document.getElementById("metal-pd"),
   pickFileMobile: document.getElementById("pick-file-mobile"),
   resetView: document.getElementById("reset-view"),
   rotateLeft: document.getElementById("rotate-left"),
@@ -65,6 +73,8 @@ const state = {
   snapshotUrl: null,
   snapshotDataUrl: null,
 };
+
+const CLIENT_ID_KEY = "tf_client_id";
 
 function setStatus(message) {
   elements.status.textContent = message;
@@ -603,21 +613,21 @@ function updateMetrics() {
 }
 
 function setDailyCounters(payload) {
-  if (!elements.dailyTotal) return;
-  const total =
-    typeof payload?.total === "number"
-      ? payload.total
-      : typeof payload?.count === "number"
-      ? payload.count
-      : 0;
-  const unique = typeof payload?.unique === "number" ? payload.unique : 0;
-  const repeat =
-    typeof payload?.repeats === "number"
-      ? payload.repeats
-      : Math.max(0, total - unique);
-  elements.dailyTotal.textContent = String(total);
-  if (elements.dailyUnique) elements.dailyUnique.textContent = String(unique);
-  if (elements.dailyRepeat) elements.dailyRepeat.textContent = String(repeat);
+  if (!elements.tgTotal && !elements.webTotal) return;
+  const platforms = payload?.platforms || {};
+  const tg = platforms.tg || payload?.tg || {};
+  const web = platforms.web || payload?.web || {};
+
+  const format = (value) =>
+    typeof value === "number" && Number.isFinite(value) ? String(value) : "—";
+
+  if (elements.tgTotal) elements.tgTotal.textContent = format(tg.total);
+  if (elements.tgUnique) elements.tgUnique.textContent = format(tg.unique);
+  if (elements.tgRepeat) elements.tgRepeat.textContent = format(tg.repeats);
+
+  if (elements.webTotal) elements.webTotal.textContent = format(web.total);
+  if (elements.webUnique) elements.webUnique.textContent = format(web.unique);
+  if (elements.webRepeat) elements.webRepeat.textContent = format(web.repeats);
 }
 
 function handleParsed(parsed, options = {}) {
@@ -1171,6 +1181,7 @@ function init() {
     bindEvents();
     setStatus("Готово к загрузке STL.");
     saveUser();
+    updateMetals();
     scheduleRender(5);
   } catch (error) {
     setError("Ошибка запуска приложения.");
@@ -1182,19 +1193,21 @@ init();
 function saveUser() {
   const tg = window.Telegram?.WebApp;
   const user = tg?.initDataUnsafe?.user;
-  if (!user || !user.id) {
-    updateDailyCounter();
-    return;
-  }
-  const payload = {
-    user_id: user.id,
-    username: user.username || null,
-    first_name: user.first_name || null,
-    last_name: user.last_name || null,
-    language_code: user.language_code || null,
-    platform: tg?.platform || null,
-    ts: Date.now(),
-  };
+  const payload = user && user.id
+    ? {
+        user_id: user.id,
+        username: user.username || null,
+        first_name: user.first_name || null,
+        last_name: user.last_name || null,
+        language_code: user.language_code || null,
+        platform: tg?.platform || "telegram",
+        ts: Date.now(),
+      }
+    : {
+        client_id: getClientId(),
+        platform: "web",
+        ts: Date.now(),
+      };
 
   const body = JSON.stringify(payload);
   fetch("/api/visit", {
@@ -1242,7 +1255,7 @@ function readArrayBuffer(file) {
 }
 
 async function updateDailyCounter() {
-  if (!elements.dailyTotal) return;
+  if (!elements.tgTotal && !elements.webTotal) return;
   try {
     const response = await fetch(`/api/visits?ts=${Date.now()}`, {
       cache: "no-store",
@@ -1251,8 +1264,69 @@ async function updateDailyCounter() {
     const payload = await response.json();
     setDailyCounters(payload);
   } catch (error) {
-    elements.dailyTotal.textContent = "—";
-    if (elements.dailyUnique) elements.dailyUnique.textContent = "—";
-    if (elements.dailyRepeat) elements.dailyRepeat.textContent = "—";
+    if (elements.tgTotal) elements.tgTotal.textContent = "—";
+    if (elements.tgUnique) elements.tgUnique.textContent = "—";
+    if (elements.tgRepeat) elements.tgRepeat.textContent = "—";
+    if (elements.webTotal) elements.webTotal.textContent = "—";
+    if (elements.webUnique) elements.webUnique.textContent = "—";
+    if (elements.webRepeat) elements.webRepeat.textContent = "—";
+  }
+}
+
+async function updateMetals() {
+  if (!elements.metalDate) return;
+  try {
+    const response = await fetch(`/api/metals?ts=${Date.now()}`, {
+      cache: "no-store",
+    });
+    if (!response.ok) throw new Error("bad response");
+    const payload = await response.json();
+    const prices = payload?.prices || {};
+    const formatter = new Intl.NumberFormat("ru-RU", {
+      maximumFractionDigits: 2,
+    });
+    const toNumber = (value) => {
+      if (typeof value === "number") return value;
+      if (typeof value === "string") {
+        const parsed = Number(value.replace(",", "."));
+        return Number.isFinite(parsed) ? parsed : null;
+      }
+      return null;
+    };
+    const setValue = (el, value) => {
+      if (!el) return;
+      const num = toNumber(value);
+      el.textContent = Number.isFinite(num) ? formatter.format(num) : "—";
+    };
+
+    const date = payload?.date ? new Date(payload.date) : null;
+    elements.metalDate.textContent = date
+      ? date.toLocaleDateString("ru-RU")
+      : "—";
+    setValue(elements.metalAu, prices.Au);
+    setValue(elements.metalAg, prices.Ag);
+    setValue(elements.metalPt, prices.Pt);
+    setValue(elements.metalPd, prices.Pd);
+  } catch (error) {
+    elements.metalDate.textContent = "—";
+    if (elements.metalAu) elements.metalAu.textContent = "—";
+    if (elements.metalAg) elements.metalAg.textContent = "—";
+    if (elements.metalPt) elements.metalPt.textContent = "—";
+    if (elements.metalPd) elements.metalPd.textContent = "—";
+  }
+}
+
+function getClientId() {
+  try {
+    const stored = localStorage.getItem(CLIENT_ID_KEY);
+    if (stored) return stored;
+    const id =
+      (typeof crypto !== "undefined" && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `web-${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`);
+    localStorage.setItem(CLIENT_ID_KEY, id);
+    return id;
+  } catch (error) {
+    return `web-${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`;
   }
 }

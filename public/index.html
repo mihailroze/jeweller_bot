@@ -13,7 +13,7 @@
       href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Manrope:wght@300;400;500;600&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css?v=8" />
+    <link rel="stylesheet" href="styles.css?v=9" />
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
   </head>
   <body>
@@ -21,6 +21,33 @@
     <div class="app">
       <header class="hero">
         <div class="brand">3D калькулятор объема моделей от Top Form.</div>
+        <div class="metal-bar" id="metal-bar">
+          <div class="metal-title">
+            Металлы сегодня <span id="metal-date">—</span>
+          </div>
+          <div class="metal-items">
+            <div class="metal-chip">
+              <span>Au</span>
+              <strong id="metal-au">—</strong>
+              <small>₽/г</small>
+            </div>
+            <div class="metal-chip">
+              <span>Ag</span>
+              <strong id="metal-ag">—</strong>
+              <small>₽/г</small>
+            </div>
+            <div class="metal-chip">
+              <span>Pt</span>
+              <strong id="metal-pt">—</strong>
+              <small>₽/г</small>
+            </div>
+            <div class="metal-chip">
+              <span>Pd</span>
+              <strong id="metal-pd">—</strong>
+              <small>₽/г</small>
+            </div>
+          </div>
+        </div>
         <div>
           <p>
             Загрузи STL, получи объём в см³ и вес восковки. Скриншот
@@ -129,14 +156,36 @@
 
       <footer class="footer">
         <div class="daily-counter">
-          <span>Сегодня</span>
-          <strong id="daily-total">—</strong>
-          <span class="daily-sep">•</span>
-          <span>Уники</span>
-          <strong id="daily-unique">—</strong>
-          <span class="daily-sep">•</span>
-          <span>Повторы</span>
-          <strong id="daily-repeat">—</strong>
+          <div class="counter-card">
+            <div class="counter-title">Telegram</div>
+            <div class="counter-row">
+              <span>Всего</span>
+              <strong id="tg-total">—</strong>
+            </div>
+            <div class="counter-row">
+              <span>Уники</span>
+              <strong id="tg-unique">—</strong>
+            </div>
+            <div class="counter-row">
+              <span>Повторы</span>
+              <strong id="tg-repeat">—</strong>
+            </div>
+          </div>
+          <div class="counter-card">
+            <div class="counter-title">Браузер</div>
+            <div class="counter-row">
+              <span>Всего</span>
+              <strong id="web-total">—</strong>
+            </div>
+            <div class="counter-row">
+              <span>Уники</span>
+              <strong id="web-unique">—</strong>
+            </div>
+            <div class="counter-row">
+              <span>Повторы</span>
+              <strong id="web-repeat">—</strong>
+            </div>
+          </div>
         </div>
       </footer>
     </div>
@@ -150,7 +199,7 @@
       });
 
       const script = document.createElement("script");
-      script.src = `app.js?v=18`;
+      script.src = `app.js?v=20`;
       script.defer = true;
       script.onload = () => {
         setTimeout(() => {

@@ -12,6 +12,7 @@ const DATA_DIR = path.join(__dirname, "data");
 const USERS_PATH = path.join(DATA_DIR, "users.json");
 const SNAPSHOT_DIR = path.join(DATA_DIR, "snapshots");
 const VISITS_PATH = path.join(DATA_DIR, "visits.json");
+const METALS_PATH = path.join(DATA_DIR, "metals.json");
 
 const BOT_TOKEN = process.env.BOT_TOKEN || "";
 const WEBAPP_URL = process.env.WEBAPP_URL || "";
@@ -96,47 +97,192 @@ async function saveVisits(visits) {
 
 function normalizeVisitEntry(entry) {
   if (!entry) {
-    return { total: 0, unique_count: 0, unique_ids: {} };
+    return {
+      total: 0,
+      unique_count: 0,
+      unique_ids: {},
+      by_platform: {
+        tg: { total: 0, unique_count: 0, unique_ids: {} },
+        web: { total: 0, unique_count: 0, unique_ids: {} },
+      },
+    };
   }
   if (typeof entry === "number") {
-    return { total: entry, unique_count: entry, unique_ids: {} };
+    return {
+      total: entry,
+      unique_count: entry,
+      unique_ids: {},
+      by_platform: {
+        tg: { total: 0, unique_count: 0, unique_ids: {} },
+        web: { total: 0, unique_count: 0, unique_ids: {} },
+      },
+    };
   }
+  const normalizePlatformEntry = (platformEntry) => {
+    if (!platformEntry) {
+      return { total: 0, unique_count: 0, unique_ids: {} };
+    }
+    if (typeof platformEntry === "number") {
+      return { total: platformEntry, unique_count: platformEntry, unique_ids: {} };
+    }
+    return {
+      total: Number(platformEntry.total) || 0,
+      unique_count: Number(platformEntry.unique_count) || 0,
+      unique_ids: platformEntry.unique_ids || {},
+    };
+  };
+
+  const hasPlatform = Boolean(entry.by_platform);
+  const byPlatform = entry.by_platform || {};
   return {
     total: Number(entry.total) || 0,
     unique_count: Number(entry.unique_count) || 0,
     unique_ids: entry.unique_ids || {},
+    by_platform: {
+      tg: hasPlatform
+        ? normalizePlatformEntry(byPlatform.tg)
+        : normalizePlatformEntry({
+            total: entry.total,
+            unique_count: entry.unique_count,
+            unique_ids: entry.unique_ids,
+          }),
+      web: hasPlatform ? normalizePlatformEntry(byPlatform.web) : normalizePlatformEntry(null),
+    },
   };
 }
 
-async function incrementDailyVisit(userId) {
+function buildStats(entry) {
+  const tg = entry.by_platform?.tg || { total: 0, unique_count: 0 };
+  const web = entry.by_platform?.web || { total: 0, unique_count: 0 };
+  return {
+    total: entry.total,
+    unique: entry.unique_count,
+    repeats: Math.max(entry.total - entry.unique_count, 0),
+    platforms: {
+      tg: {
+        total: tg.total || 0,
+        unique: tg.unique_count || 0,
+        repeats: Math.max((tg.total || 0) - (tg.unique_count || 0), 0),
+      },
+      web: {
+        total: web.total || 0,
+        unique: web.unique_count || 0,
+        repeats: Math.max((web.total || 0) - (web.unique_count || 0), 0),
+      },
+    },
+  };
+}
+
+async function incrementDailyVisit(visitId, platformKey) {
   const visits = await loadVisits();
   const key = getDateKey();
   const entry = normalizeVisitEntry(visits[key]);
   entry.total += 1;
-  if (userId) {
-    const id = String(userId);
+  if (visitId) {
+    const id = String(visitId);
     if (!entry.unique_ids[id]) {
       entry.unique_ids[id] = true;
       entry.unique_count += 1;
     }
   }
+
+  const keyPlatform = platformKey === "tg" ? "tg" : "web";
+  const platformEntry = entry.by_platform[keyPlatform] || {
+    total: 0,
+    unique_count: 0,
+    unique_ids: {},
+  };
+  platformEntry.total += 1;
+  if (visitId) {
+    const id = String(visitId);
+    if (!platformEntry.unique_ids[id]) {
+      platformEntry.unique_ids[id] = true;
+      platformEntry.unique_count += 1;
+    }
+  }
+  entry.by_platform[keyPlatform] = platformEntry;
   visits[key] = entry;
   await saveVisits(visits);
-  return {
-    total: entry.total,
-    unique: entry.unique_count,
-    repeats: Math.max(entry.total - entry.unique_count, 0),
-  };
+  return buildStats(entry);
 }
 
 async function getDailyVisitStats(dateKey) {
   const visits = await loadVisits();
   const entry = normalizeVisitEntry(visits[dateKey]);
-  return {
-    total: entry.total,
-    unique: entry.unique_count,
-    repeats: Math.max(entry.total - entry.unique_count, 0),
+  return buildStats(entry);
+}
+
+function normalizeMetals(payload) {
+  if (!payload || typeof payload !== "object") return null;
+  const pricesSource = payload.prices && typeof payload.prices === "object"
+    ? payload.prices
+    : payload;
+  const pick = (key) => {
+    const value =
+      pricesSource[key] ??
+      pricesSource[key.toLowerCase?.() || key] ??
+      pricesSource[key.toUpperCase?.() || key];
+    if (value === null || value === undefined || value === "") return null;
+    const num = Number(String(value).replace(",", "."));
+    return Number.isFinite(num) ? num : null;
   };
+  return {
+    date: payload.date || getDateKey(),
+    currency: payload.currency || "RUB",
+    unit: payload.unit || "g",
+    prices: {
+      Au: pick("Au"),
+      Ag: pick("Ag"),
+      Pt: pick("Pt"),
+      Pd: pick("Pd"),
+    },
+  };
+}
+
+function getMetalsFromEnv() {
+  const raw = process.env.METAL_PRICES;
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    return normalizeMetals(parsed);
+  } catch (error) {
+    return null;
+  }
+}
+
+async function loadMetals() {
+  try {
+    const raw = await fs.readFile(METALS_PATH, "utf-8");
+    return normalizeMetals(JSON.parse(raw));
+  } catch (error) {
+    return null;
+  }
+}
+
+async function saveMetals(payload) {
+  await ensureDataDir();
+  await fs.writeFile(METALS_PATH, JSON.stringify(payload, null, 2), "utf-8");
+}
+
+async function handleMetals(req, res) {
+  const envMetals = getMetalsFromEnv();
+  if (envMetals) {
+    await saveMetals(envMetals);
+    sendJson(res, 200, { ok: true, ...envMetals });
+    return;
+  }
+  const stored = await loadMetals();
+  if (stored) {
+    sendJson(res, 200, { ok: true, ...stored });
+    return;
+  }
+  sendJson(res, 200, {
+    ok: true,
+    date: getDateKey(),
+    currency: "RUB",
+    unit: "g",
+    prices: { Au: null, Ag: null, Pt: null, Pd: null },
+  });
 }
 
 function sendJson(res, status, payload) {
@@ -154,12 +300,18 @@ async function handleVisit(req, res) {
   req.on("end", async () => {
     try {
       const payload = JSON.parse(data || "{}");
-      if (!payload.user_id) {
-        sendJson(res, 400, { ok: false, error: "user_id is required" });
+      const userId = payload.user_id;
+      const clientId = payload.client_id;
+      if (!userId && !clientId) {
+        sendJson(res, 400, { ok: false, error: "user_id or client_id is required" });
         return;
       }
-      await upsertUser(payload);
-      const stats = await incrementDailyVisit(payload.user_id);
+      if (userId) {
+        await upsertUser(payload);
+      }
+      const visitId = userId ? `tg:${userId}` : `web:${clientId}`;
+      const platformKey = userId ? "tg" : "web";
+      const stats = await incrementDailyVisit(visitId, platformKey);
       sendJson(res, 200, { ok: true, ...stats });
     } catch (error) {
       sendJson(res, 400, { ok: false, error: "invalid json" });
@@ -410,6 +562,10 @@ const server = http.createServer(async (req, res) => {
   }
   if (req.method === "GET" && req.url.startsWith("/api/visits")) {
     await handleVisitCount(req, res);
+    return;
+  }
+  if (req.method === "GET" && req.url.startsWith("/api/metals")) {
+    await handleMetals(req, res);
     return;
   }
   if (req.method === "POST" && req.url === "/api/snapshot") {
