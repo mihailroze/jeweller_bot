@@ -146,7 +146,7 @@ function parseBinarySTL(buffer) {
 
 function parseAsciiSTL(buffer) {
   const text = new TextDecoder().decode(buffer);
-  const regex = /vertex\\s+([\\-0-9eE+.]+)\\s+([\\-0-9eE+.]+)\\s+([\\-0-9eE+.]+)/g;
+  const regex = /vertex\s+([0-9eE+.\-]+)\s+([0-9eE+.\-]+)\s+([0-9eE+.\-]+)/g;
   const positions = [];
   const normals = [];
   let verts = [];
